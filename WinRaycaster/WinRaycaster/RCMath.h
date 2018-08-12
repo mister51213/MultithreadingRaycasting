@@ -2,7 +2,7 @@
 
 #define _USE_MATH_DEFINES
 #define CIRCLE 0
-#define RECT 1
+//#define RECT 1
 #define PLAYER_RADIUS 50.f
 #define MIN_FACING_DP 0.70710678118f // cos(45 * PI / 180)
 
