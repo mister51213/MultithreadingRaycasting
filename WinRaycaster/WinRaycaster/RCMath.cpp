@@ -1,11 +1,12 @@
-#include "RCMath.h"
+#include "stdafx.h"
+
 
 // ROTATOR STRUCT
 constexpr float Rotator::notchestoRadians;
 constexpr float Rotator::radiansToNotches;
 
 Rotator::Rotator(const int inNotches) :
-	notches(inNotches) {
+	notches((float)inNotches) {
 	radians = notches * notchestoRadians;
 }
 

@@ -6,14 +6,18 @@
 #define PLAYER_RADIUS 50.f
 #define MIN_FACING_DP 0.70710678118f // cos(45 * PI / 180)
 
-#include <math.h>
+#define TAU		(6.283185307179586476925286766559f)
+#define PI		(TAU / 2.0f)
+
+#define Ang2Rad	(TAU / 360.0f)
+
 
 struct Rotator {
 	float radians;
 	float notches;
 
-	static constexpr float notchestoRadians = 2 * M_PI / 1024;
-	static constexpr float radiansToNotches = 1024 / (2 * M_PI);
+	static constexpr float notchestoRadians = TAU / 1024;
+	static constexpr float radiansToNotches = 1024 / TAU;
 
 	Rotator(const int inNotches);
 
