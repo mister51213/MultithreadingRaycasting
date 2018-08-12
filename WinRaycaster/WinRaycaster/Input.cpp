@@ -14,7 +14,7 @@ Input::Input(const Input& other)
 Input::~Input()
 {}
 
-bool Input::Initialize(HINSTANCE hinstance, HWND hwnd, int screenWidth, int screenHeight)
+HRESULT Input::Initialize(HINSTANCE hinstance, HWND hwnd, int screenWidth, int screenHeight)
 {
 	//HRESULT result;
 
@@ -26,35 +26,37 @@ bool Input::Initialize(HINSTANCE hinstance, HWND hwnd, int screenWidth, int scre
 	_mouseX = 0;
 	_mouseY = 0;
 
+	HRESULT res;
+
 	// Initialize the main direct input interface.
-	DirectInput8Create(hinstance, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&_directInput, NULL);
+	res = DirectInput8Create(hinstance, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&_directInput, NULL);
 	
 	// Initialize the direct input interface for the keyboard.
-	_directInput->CreateDevice(GUID_SysKeyboard, &_keyboard, NULL);
+	res = _directInput->CreateDevice(GUID_SysKeyboard, &_keyboard, NULL);
 
 	// Set the data format.  In this case since it is a keyboard we can use the predefined data format.
-	_keyboard->SetDataFormat(&c_dfDIKeyboard);
+	res = _keyboard->SetDataFormat(&c_dfDIKeyboard);
 
 	// Set the cooperative level of the keyboard to not share with other programs.
-	_keyboard->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_EXCLUSIVE);
+	res = _keyboard->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_EXCLUSIVE);
 
 	// Now acquire the keyboard.
-	_keyboard->Acquire();
+	res = _keyboard->Acquire();
 	
 	// Initialize the direct input interface for the mouse.
-	_directInput->CreateDevice(GUID_SysMouse, &_mouse, NULL);
+	res = _directInput->CreateDevice(GUID_SysMouse, &_mouse, NULL);
 
 	// Set the data format for the mouse using the pre-defined mouse data format.
-	_mouse->SetDataFormat(&c_dfDIMouse);
+	res = _mouse->SetDataFormat(&c_dfDIMouse);
 
 	//@SETTINGS
 	// Set the cooperative level of the mouse to share with other programs.
-	_mouse->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_EXCLUSIVE /*DISCL_NONEXCLUSIVE*/);
+	res = _mouse->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_EXCLUSIVE /*DISCL_NONEXCLUSIVE*/);
 
 	// Acquire the mouse.
-	_mouse->Acquire();
+	res = _mouse->Acquire();
 
-	return true;
+	return res;
 }
 
 void Input::Shutdown()

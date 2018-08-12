@@ -29,7 +29,7 @@ public:
 	Input(const Input&);
 	~Input();
 
-	bool Initialize(HINSTANCE hinstance, HWND hwnd, int screenWidth, int screenHeight);
+	HRESULT Initialize(HINSTANCE hinstance, HWND hwnd, int screenWidth, int screenHeight);
 	void Shutdown();
 	bool Tick();
 
