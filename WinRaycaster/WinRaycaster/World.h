@@ -191,45 +191,90 @@ public:
 		}
 	}
 
+	//void Render(Camera &Cam, const TraceHit &Hit, const int Col) {
+	//	Texture *pWall = Hit.pCell->pWallTex;
+
+	//	//Cam.pImage[Col] = 0xFF000000;
+	//	//Cam.pImage[Col + (Cam.Hei - 1) * Cam.Wid] = 0xFF000000;
+
+	//	/*const float fracX = Hit.Pos.x - (float)Hit.CellX;
+	//	const float fracY = Hit.Pos.y - (float)Hit.CellY;
+
+	//	const int texU = (int)(min(fracX, fracY) * (float)pWall->Wid);*/
+
+	//	Vec2 path = Hit.Pos - Cam.Pos;
+
+	//	float fracX = Hit.Pos.x - (float)Hit.CellX;
+	//	float fracY = Hit.Pos.y - (float)Hit.CellY;
+	//	float fracU;
+	//	Vec2 hitPos;
+
+	//	if (Hit.LastX != Hit.CellX) {
+	//		// Crossed a vertical boundary
+
+	//		//const float ofs = path.y / path.x * fracX;
+	//		//fracU = fracY - ofs;
+	//		fracU = fracY;
+	//		
+	//		//hitPos = Vec2((float)Hit.CellX, (float)Hit.CellY + fracU);
+	//	} else {
+	//		// Crossed a horizontal boundary
+
+	//		//const float ofs = path.x / path.y * fracY;
+	//		//fracU = fracX - ofs;
+	//		fracU = fracX;
+
+	//		//hitPos = Vec2((float)Hit.CellX + fracU, (float)Hit.CellY);
+	//	}
+
+	//	hitPos = Hit.Pos;
+
+	//	const float dist = (hitPos - Cam.Pos).Size();
+
+	//	const float hei = (float)WallHeight / dist;
+	//	const int half = (int)(hei / 2.0f);
+	//	const int top = max(Cam.Hei / 2 - half, 0);
+	//	const int btm = min(Cam.Hei / 2 + half, Cam.Hei);
+
+	//	const float sclV = (float)pWall->Hei / hei;
+
+	//	const int texU = (int)(fracU * (float)pWall->Wid);
+	//	assert(texU >= 0 && texU < pWall->Wid);
+
+	//	Pixel *pTex = pWall->pImage + texU;
+	//	const int utop = Cam.Hei / 2 - half;
+
+	//	int ofs = Col + top * Cam.Wid;
+	//	for (int y = top; y < btm; y++, ofs += Cam.Wid) {
+	//		//Cam.pImage[Col + y * Cam.Wid] = *Hit.pCell;
+	//		//Cam.pImage[ofs] = *Hit.pCell;
+	//		const int texV = (int)((float)(y - utop) * sclV);
+	//		assert(texV >= 0 && texV < pWall->Hei);
+
+	//		Cam.pImage[ofs] = pTex[texV * pWall->Wid];
+	//	}
+	//}
+
 	void Render(Camera &Cam, const TraceHit &Hit, const int Col) {
 		Texture *pWall = Hit.pCell->pWallTex;
-
-		//Cam.pImage[Col] = 0xFF000000;
-		//Cam.pImage[Col + (Cam.Hei - 1) * Cam.Wid] = 0xFF000000;
-
-		/*const float fracX = Hit.Pos.x - (float)Hit.CellX;
-		const float fracY = Hit.Pos.y - (float)Hit.CellY;
-
-		const int texU = (int)(min(fracX, fracY) * (float)pWall->Wid);*/
-
 		Vec2 path = Hit.Pos - Cam.Pos;
 
-		float fracX = Hit.Pos.x - (float)Hit.CellX;
-		float fracY = Hit.Pos.y - (float)Hit.CellY;
 		float fracU;
-		Vec2 hitPos;
-
+		Vec2 hitPosCrct = Hit.Pos;
 		if (Hit.LastX != Hit.CellX) {
-			// Crossed a vertical boundary
-
-			//const float ofs = path.y / path.x * fracX;
-			//fracU = fracY - ofs;
-			fracU = fracY;
-			
-			//hitPos = Vec2((float)Hit.CellX, (float)Hit.CellY + fracU);
-		} else {
-			// Crossed a horizontal boundary
-
-			//const float ofs = path.x / path.y * fracY;
-			//fracU = fracX - ofs;
-			fracU = fracX;
-
-			//hitPos = Vec2((float)Hit.CellX + fracU, (float)Hit.CellY);
+			// moved HORIZONTALLY
+			fracU = Hit.Pos.y - (float)Hit.CellY;
+			const float yCrct = ((float)Hit.CellX - Cam.Pos.x) * path.y / path.x;
+			hitPosCrct = Vec2(Hit.CellX, yCrct);
+		}
+		else { 
+			// moved VERTICALLY
+			fracU = Hit.Pos.x - (float)Hit.CellX;
+			const float xCrt = ((float)Hit.CellY - Cam.Pos.y) * path.x / path.y;
+			hitPosCrct = Vec2(xCrt, Hit.CellY);
 		}
 
-		hitPos = Hit.Pos;
-
-		const float dist = (hitPos - Cam.Pos).Size();
+		const float dist = (hitPosCrct - Cam.Pos).Size();
 
 		const float hei = (float)WallHeight / dist;
 		const int half = (int)(hei / 2.0f);
@@ -246,8 +291,6 @@ public:
 
 		int ofs = Col + top * Cam.Wid;
 		for (int y = top; y < btm; y++, ofs += Cam.Wid) {
-			//Cam.pImage[Col + y * Cam.Wid] = *Hit.pCell;
-			//Cam.pImage[ofs] = *Hit.pCell;
 			const int texV = (int)((float)(y - utop) * sclV);
 			assert(texV >= 0 && texV < pWall->Hei);
 
