@@ -8,6 +8,7 @@
 
 #define TAU		(6.283185307179586476925286766559f)
 #define PI		(TAU / 2.0f)
+#define QTAU	(TAU / 4.0f)
 
 #define Ang2Rad	(TAU / 360.0f)
 
