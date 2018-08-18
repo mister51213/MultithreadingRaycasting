@@ -151,6 +151,10 @@ public:
 
 	Cell() :
 		pWallTex(nullptr) {}
+
+	inline bool IsSolid() const {
+		return pWallTex ? true : false;
+	}
 };
 
 
@@ -159,7 +163,7 @@ protected:
 	vector<Cell>	map;
 
 public:
-	struct TraceHit {
+	/*struct TraceHit {
 		Cell	*pCell;
 		//float	Dist;
 		Vec2	Pos;
@@ -171,7 +175,7 @@ public:
 
 		TraceHit(Pixel *pCell, const float Dist, const Vec2 &Pos, const int CellX, const int CellY) :
 			pCell(pCell), Dist(Dist), Pos(Coord), CellX(CellX), CellY(CellY) {}
-	};
+	};*/
 
 	int WallHeight;
 
@@ -179,11 +183,11 @@ public:
 		map = vector<Cell>(Size * Size);
 	}
 
-	inline Cell& GetCell(const int x, const int y) {
-		assert(x >= 0 && x < Size);
-		assert(y >= 0 && y < Size);
+	inline Cell& GetCell(const Int2 &Pos) {
+		assert(Pos.x >= 0 && Pos.x < Size);
+		assert(Pos.y >= 0 && Pos.y < Size);
 
-		return map[x + y * Size];
+		return map[Pos.x + Pos.y * Size];
 	}
 
 	inline bool InBounds(const Vec2 &Pos) const {
@@ -191,7 +195,7 @@ public:
 			   Pos.y >= 0.0f && Pos.y < (float)Size;
 	}
 
-	TraceHit Trace(const Vec2 &Origin, const Vec2 &Step) {
+	/*TraceHit Trace(const Vec2 &Origin, const Vec2 &Step) {
 		TraceHit hit;
 		hit.Pos = Origin;
 
@@ -213,42 +217,119 @@ public:
 		}
 
 		return TraceHit();
-	}
+	}*/
 
 
 	struct TraceHit2 {
-		
+		Cell	*pCell;
+		float	TexU;
+		Vec2	Pos;
+
+		TraceHit2(Cell *pCell, const float TexU, const Vec2 &Pos) :
+			pCell(pCell), TexU(TexU), Pos(Pos) {}
 	};
 
-	TraceHit2 Trace2(const Vec2 &Origin, const float Theta) {
-		float theta = modf(Theta + TAU, TAU);
+	TraceHit2 Trace2(const Vec2 &Origin, const float Theta, Graphics *pGfx) {
+		float theta = fmod(Theta + TAU, TAU);
 
 		int quad = 0;
 		for (; theta >= QTAU; theta -= QTAU, quad++);
 
-		/*static Vec2 tmp[4] = {
-			Vec2(0, -1),
-			Vec2(+1, 0),
-			Vec2(0, +1),
-			Vec2(-1, 0)
-		};*/
+		static Int2 oppStep[4] = {
+			Int2( 1, 0),	// Quad0: East		00
+			Int2( 1, 0),	// Quad1: South		01
+			Int2(-1, 0),	// Quad2: West		10
+			Int2(-1, 0)		// Quad3: North		11
+		};
 
-		const float orgX = Origin.x - (int)Origin.x;
-		const float orgY = Origin.y - (int)Origin.y;
+		static Int2 adjStep[4] = {
+			Int2(0, -1),	// Quad0: East		00
+			Int2(0,  1),	// Quad1: South		01
+			Int2(0,  1),	// Quad2: West		10
+			Int2(0, -1)		// Quad3: North		11
+		};
 
-		float opp = orgY * tanf(theta);
-		float hit = orgX + opp;
-		if (hit < 1.0f) {
-			// Hit top
+		Int2 cellPos(Origin);
+		const Vec2 orgPos = Origin - Vec2(cellPos);
+
+		/*const float orgX = Origin.x - (int)Origin.x;
+		const float orgY = Origin.y - (int)Origin.y;*/
+
+		float opp = orgPos.y * tanf(theta);
+		float pos = orgPos.x + opp;
+		if (pos < 1.0f) {
+			// Hit adjacent wall
 			
 		} else {
-			// Hit right
-			opp = (1.0f - orgX) * tanf(QTAU - theta);
-			hit = orgY - opp;
+			// Hit opposite wall
+			opp = tanf(QTAU - theta);
+			//opp = (1.0f - orgPos.x) * tanf(QTAU - theta);
+			pos = orgPos.y - (1.0f - orgPos.x) * opp;
 
+			Int2 cellDir = oppStep[quad];
+
+			if (pGfx) {Vec2 OppPos = Vec2(cellPos) + Vec2(1, pos);
+			Point Dst(DebugX + OppPos.x * DebugScl, DebugY + OppPos.y * DebugScl);
+			pGfx->DrawEllipse(&Pen(Color(255, 255,0,0)), Dst.X-2, Dst.Y-2, 4, 4);}
+
+			for (;;) {
+				cellPos += cellDir;
+				if (GetCell(cellPos /* + cellDir*/).IsSolid())
+					break;
+				//cellPos += cellDir;
+
+				if (pos - opp >= 0.0f) {
+					// Hit the opposite wall
+					//cellDir = oppStep[quad];
+					pos -= opp;
+
+					if (pGfx) {Vec2 OppPos = Vec2(cellPos) + Vec2(1, pos);
+					Point Dst(DebugX + OppPos.x * DebugScl, DebugY + OppPos.y * DebugScl);
+					pGfx->DrawEllipse(&Pen(Color(255, 191,0,0)), Dst.X-2, Dst.Y-2, 4, 4);}
+				} else {
+					// Crossed to an adjacent wall
+
+					if (pGfx) {Vec2 OppPos = Vec2(cellPos) + Vec2(pos / opp, 0);
+					Point Dst(DebugX + OppPos.x * DebugScl, DebugY + OppPos.y * DebugScl);
+					pGfx->DrawEllipse(&Pen(Color(255, 0,191,0)), Dst.X-2, Dst.Y-2, 4, 4);}
+
+					//cellDir = adjStep[quad];
+					cellPos += adjStep[quad];
+					if (GetCell(cellPos).IsSolid()) {
+						pos /= opp;	// law of similar triangles simplified
+
+						//return TraceHit2(nullptr, 0, Vec2());
+
+						if (pGfx) {Vec2 OppPos = Vec2(cellPos) + Vec2(pos, 1);
+						Point Dst(DebugX + OppPos.x * DebugScl, DebugY + OppPos.y * DebugScl);
+						pGfx->DrawEllipse(&Pen(Color(255, 0,191,0)), Dst.X-4, Dst.Y-4, 8, 8);}
+
+						return TraceHit2(&GetCell(cellPos), pos, Vec2(cellPos) + Vec2(pos, 1));
+					}
+
+					pos -= opp - 1.0f;
+
+					if (pGfx) {Vec2 OppPos = Vec2(cellPos) + Vec2(1, pos);
+					Point Dst(DebugX + OppPos.x * DebugScl, DebugY + OppPos.y * DebugScl);
+					pGfx->DrawEllipse(&Pen(Color(255, 0,0,191)), Dst.X-2, Dst.Y-2, 4, 4);}
+				}
+
+				if (GetCell(cellPos).IsSolid())
+					break;
+			}
+
+			if (pGfx) {Vec2 OppPos = Vec2(cellPos) + Vec2(0, pos);
+			Point Dst(DebugX + OppPos.x * DebugScl, DebugY + OppPos.y * DebugScl);
+			pGfx->DrawEllipse(&Pen(Color(255, 255,0,0)), Dst.X-4, Dst.Y-4, 8, 8);}
+
+			// We've hit a solid (opposite) wall. Render it!
+			// Render slice at pos
+			return TraceHit2(&GetCell(cellPos), pos, Vec2(cellPos) + Vec2(0, pos));
+			//return TraceHit2(nullptr, 0, Vec2());
 		}
 
 
+		return TraceHit2(nullptr, 0, Vec2());
 	}
 
 	void Scan(Camera &Cam, Graphics *pGfx) {
@@ -258,9 +339,18 @@ public:
 		Cam.Clear();
 
 		for (int col = 0; col < Cam.Wid; col++) {
+		//int col = halfwid; {
+
 			float ang = (float)(col - halfwid) * slice + Cam.Dir;
 
-			TraceHit hit = Trace(Cam.Pos, Vec2(sinf(ang), -cosf(ang)) * 0.01f);
+			if (pGfx) {
+				/*{Point Org(DebugX + Cam.Pos.x * DebugScl, DebugY + Cam.Pos.y * DebugScl);
+				Point Dst(Org.X + sin(ang) * DebugScl*4, Org.Y - cos(ang) * DebugScl*4);
+				pGfx->DrawLine(&Pen(Color(63, 0,0,255)), Org, Dst);}*/
+			}
+
+			//TraceHit hit = Trace(Cam.Pos, Vec2(sinf(ang), -cosf(ang)) * 0.01f);
+			TraceHit2 hit = Trace2(Cam.Pos, ang, pGfx);
 			
 			if (hit.pCell) {
 				// Ray hit a wall
@@ -274,92 +364,65 @@ public:
 
 	void Debug(Graphics *pGfx) {
 		SolidBrush clrVoid(Color(255,255,255));
-		SolidBrush clrWall(Color(63,0,0));
+		SolidBrush clrWall(Color(191,255,191));
+		Pen clrGrid(Color(191,191,191));
 
 		for (int y = 0; y < Size; y++)
-			for (int x = 0; x < Size; x++)
+			for (int x = 0; x < Size; x++) {
 				pGfx->FillRectangle(
-					GetCell(x, y).pWallTex ? &clrWall : &clrVoid,
-					DebugX + x * DebugScl, 
-					DebugY + y * DebugScl, 
-					DebugScl, 
-					DebugScl);
+					GetCell(Int2(x, y)).IsSolid() ? &clrWall : &clrVoid,
+					DebugX + x * DebugScl, DebugY + y * DebugScl, 
+					DebugScl, DebugScl);
+
+				if (!GetCell(Int2(x, y)).IsSolid())
+					pGfx->DrawRectangle(&clrGrid,
+						DebugX + x * DebugScl, DebugY + y * DebugScl, 
+						DebugScl-1, DebugScl-1);
+			}
 	}
-
-	//void Render(Camera &Cam, const TraceHit &Hit, const int Col) {
-	//	Texture *pWall = Hit.pCell->pWallTex;
-
-	//	//Cam.pImage[Col] = 0xFF000000;
-	//	//Cam.pImage[Col + (Cam.Hei - 1) * Cam.Wid] = 0xFF000000;
-
-	//	/*const float fracX = Hit.Pos.x - (float)Hit.CellX;
-	//	const float fracY = Hit.Pos.y - (float)Hit.CellY;
-
-	//	const int texU = (int)(min(fracX, fracY) * (float)pWall->Wid);*/
-
-	//	Vec2 path = Hit.Pos - Cam.Pos;
-
-	//	float fracX = Hit.Pos.x - (float)Hit.CellX;
-	//	float fracY = Hit.Pos.y - (float)Hit.CellY;
-	//	float fracU;
-	//	Vec2 hitPos;
-
-	//	if (Hit.LastX != Hit.CellX) {
-	//		// Crossed a vertical boundary
-
-	//		//const float ofs = path.y / path.x * fracX;
-	//		//fracU = fracY - ofs;
-	//		fracU = fracY;
-	//		
-	//		//hitPos = Vec2((float)Hit.CellX, (float)Hit.CellY + fracU);
-	//	} else {
-	//		// Crossed a horizontal boundary
-
-	//		//const float ofs = path.x / path.y * fracY;
-	//		//fracU = fracX - ofs;
-	//		fracU = fracX;
-
-	//		//hitPos = Vec2((float)Hit.CellX + fracU, (float)Hit.CellY);
-	//	}
-
-	//	hitPos = Hit.Pos;
-
-	//	const float dist = (hitPos - Cam.Pos).Size();
-
-	//	const float hei = (float)WallHeight / dist;
-	//	const int half = (int)(hei / 2.0f);
-	//	const int top = max(Cam.Hei / 2 - half, 0);
-	//	const int btm = min(Cam.Hei / 2 + half, Cam.Hei);
-
-	//	const float sclV = (float)pWall->Hei / hei;
-
-	//	const int texU = (int)(fracU * (float)pWall->Wid);
-	//	assert(texU >= 0 && texU < pWall->Wid);
-
-	//	Pixel *pTex = pWall->pImage + texU;
-	//	const int utop = Cam.Hei / 2 - half;
-
-	//	int ofs = Col + top * Cam.Wid;
-	//	for (int y = top; y < btm; y++, ofs += Cam.Wid) {
-	//		//Cam.pImage[Col + y * Cam.Wid] = *Hit.pCell;
-	//		//Cam.pImage[ofs] = *Hit.pCell;
-	//		const int texV = (int)((float)(y - utop) * sclV);
-	//		assert(texV >= 0 && texV < pWall->Hei);
-
-	//		Cam.pImage[ofs] = pTex[texV * pWall->Wid];
-	//	}
-	//}
-
-	void Render(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx) {
+	
+	void Render(Camera &Cam, const TraceHit2 &Hit, const int Col, Graphics *pGfx) {
 		Texture *pWall = Hit.pCell->pWallTex;
 
-		//Cam.pImage[Col] = 0xFF000000;
-		//Cam.pImage[Col + (Cam.Hei - 1) * Cam.Wid] = 0xFF000000;
+		const float dist = (Hit.Pos - Cam.Pos).Size();
 
-		/*const float fracX = Hit.Pos.x - (float)Hit.CellX;
-		const float fracY = Hit.Pos.y - (float)Hit.CellY;
+		const float hei = (float)WallHeight / dist;
+		const int half = (int)(hei / 2.0f);
+		const int top = max(Cam.Hei / 2 - half, 0);
+		const int btm = min(Cam.Hei / 2 + half, Cam.Hei);
 
-		const int texU = (int)(min(fracX, fracY) * (float)pWall->Wid);*/
+		//const int mip = 0;
+		//const int mip = min((int)dist, pWall->Mips);
+		const int mip = min((int)sqrtf(dist), pWall->Mips);
+		const int mipWid = pWall->Wid >> mip;
+		const int mipHei = pWall->Hei >> mip;
+
+		const float sclV = (float)mipHei / hei;
+
+		if (pGfx) {
+			Pen clrTrace(Color(255, 0,0, Col / 3));
+			Point Org(DebugX + Cam.Pos.x * DebugScl, DebugY + Cam.Pos.y * DebugScl);
+			Point Dst(DebugX + Hit.Pos.x * DebugScl, DebugY + Hit.Pos.y * DebugScl);
+
+			pGfx->DrawLine(&clrTrace, Org, Dst);
+		}
+
+		const int texU = (int)(Hit.TexU * (float)mipWid);
+		assert(texU >= 0 && texU < mipWid);
+
+		Pixel *pTex = pWall->pMip[mip] + texU;
+		const int utop = Cam.Hei / 2 - half;
+
+		int ofs = Col + top * Cam.Wid;
+		for (int y = top; y < btm; y++, ofs += Cam.Wid) {
+			const int texV = (int)((float)(y - utop) * sclV);
+			assert(texV >= 0 && texV < mipHei);
+			Cam.pImage[ofs] = pTex[texV * mipWid];
+		}
+	}
+
+	/*void Render(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx) {
+		Texture *pWall = Hit.pCell->pWallTex;
 
 		Vec2 path = Hit.Pos - Cam.Pos;
 
@@ -370,20 +433,10 @@ public:
 
 		if (Hit.LastX != Hit.CellX) {
 			// Crossed a vertical boundary
-
-			//const float ofs = path.y / path.x * fracX;
-			//fracU = fracY - ofs;
 			fracU = fracY;
-
-			//hitPos = Vec2((float)Hit.CellX, (float)Hit.CellY + fracU);
 		} else {
 			// Crossed a horizontal boundary
-
-			//const float ofs = path.x / path.y * fracY;
-			//fracU = fracX - ofs;
 			fracU = fracX;
-
-			//hitPos = Vec2((float)Hit.CellX + fracU, (float)Hit.CellY);
 		}
 
 		hitPos = Hit.Pos;
@@ -401,7 +454,6 @@ public:
 		const int mipWid = pWall->Wid >> mip;
 		const int mipHei = pWall->Hei >> mip;
 
-		//const float sclV = (float)pWall->Hei / hei;
 		const float sclV = (float)mipHei / hei;
 
 		if (pGfx) {
@@ -412,8 +464,6 @@ public:
 			pGfx->DrawLine(&clrTrace, Org, Dst);
 		}
 
-		//const int texU = (int)(fracU * (float)pWall->Wid);
-		//assert(texU >= 0 && texU < pWall->Wid);
 		const int texU = (int)(fracU * (float)mipWid);
 		assert(texU >= 0 && texU < mipWid);
 
@@ -422,14 +472,9 @@ public:
 
 		int ofs = Col + top * Cam.Wid;
 		for (int y = top; y < btm; y++, ofs += Cam.Wid) {
-			//Cam.pImage[Col + y * Cam.Wid] = *Hit.pCell;
-			//Cam.pImage[ofs] = *Hit.pCell;
 			const int texV = (int)((float)(y - utop) * sclV);
-			//assert(texV >= 0 && texV < pWall->Hei);
 			assert(texV >= 0 && texV < mipHei);
-
-			//Cam.pImage[ofs] = pTex[texV * pWall->Wid];
 			Cam.pImage[ofs] = pTex[texV * mipWid];
 		}
-	}
+	}*/
 };

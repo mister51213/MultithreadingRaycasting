@@ -1,6 +1,6 @@
 #include "stdafx.h"
 
-
+/*
 // ROTATOR STRUCT
 constexpr float Rotator::notchestoRadians;
 constexpr float Rotator::radiansToNotches;
@@ -102,4 +102,4 @@ Vec2 Vec2::operator * (const float scalar) const {
 void Vec2::operator *= (const float scalar) {
 	x *= scalar;
 	y *= scalar;
-}
+}*/
