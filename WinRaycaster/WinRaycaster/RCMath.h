@@ -9,6 +9,7 @@
 #define TAU		6.283185307179586476925286766559f
 #define PI		(TAU / 2.0f)
 #define QTAU	(TAU / 4.0f)
+#define ETAU	(TAU / 8.0f)
 
 #define Ang2Rad	(TAU / 360.0f)
 
@@ -29,19 +30,13 @@ template <typename Type> struct TempVect2D {
 	Type x, y;
 
 	TempVect2D() :
-		x(0.f),
-		y(0.f)
-	{}
+		x((Type)0), y((Type)0) {}
 
-	template <typename OtherType> TempVect2D(const OtherType& other) {
-		x = (Type)other.x;
-		y = (Type)other.y;
-	}
+	template <typename OtherType> TempVect2D(const OtherType& other) :
+		x((Type)other.x), y((Type)other.y) {}
 
-	TempVect2D(const Type inX, const Type inY) :
-		x(inX),
-		y(inY)
-	{}
+	template <typename TypeX, typename TypeY> TempVect2D(const TypeX x, const TypeY y) :
+		x((Type)x), y((Type)y) {}
 
 	Type SizeSquared() const {
 		return x * x + y * y;

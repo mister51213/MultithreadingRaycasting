@@ -1,10 +1,24 @@
 #pragma once
 
 
-static int DebugX, DebugY, DebugScl;
+__declspec(selectany) float DebugX, DebugY, DebugScl;
+
+#define Plot(PlotX, PlotY, Rad, color) {									\
+	if (pGfx) {																\
+		Vec2 OppPos = Vec2(cellPos) + Vec2(PlotX, PlotY);					\
+		int DstX = (int)(DebugX + OppPos.x * DebugScl);						\
+		int DstY = (int)(DebugY + OppPos.y * DebugScl);						\
+		pGfx->DrawEllipse(&Pen(color), DstX-Rad, DstY-Rad, Rad*2, Rad*2);	\
+	}																		\
+}
 
 
 class Pixel {
+protected:
+	static unsigned ScaleBy(const unsigned A, const unsigned Mul) {
+		return (A * Mul) >> 8;
+	}
+
 public:
 	unsigned argb;
 
@@ -13,12 +27,31 @@ public:
 	Pixel(const unsigned argb) :
 		argb(argb) {}
 
+	Pixel(const unsigned A, const unsigned R, const unsigned G, const unsigned B) :
+		argb((A << 24) | (R << 16) | (G << 8) | B) {}
+
 	inline unsigned Alpha() const {
 		return argb >> 24;
 	}
 
+	inline unsigned Red() const {
+		return (argb >> 16) & 0x0FFUL;
+	}
+
+	inline unsigned Green() const {
+		return (argb >> 8) & 0x0FFUL;
+	}
+
+	inline unsigned Blue() const {
+		return argb & 0x0FFUL;
+	}
+
 	inline Pixel Quarter() const {
 		return (argb & 0xFCFCFCFC) >> 2;
+	}
+
+	inline Pixel Scale(const int Mul) const {
+		return Pixel(255, ScaleBy(Red(), Mul), ScaleBy(Green(), Mul), ScaleBy(Blue(), Mul));
 	}
 
 	inline Pixel operator+ (const Pixel &Other) const {
@@ -51,7 +84,8 @@ public:
 
 	void Clear() {
 		assert(pImage);
-		memset(pImage, -1, Wid * Hei * sizeof(Pixel));
+		//memset(pImage, 0, Wid * Hei * sizeof(Pixel));
+		for (int i = 0; i < Wid * Hei; pImage[i++] = 0xFF000000);
 	}
 
 	void Display(Graphics *pGfx) {
@@ -105,9 +139,6 @@ public:
 		Hei = bd.Height;
 		assert(Hei && !(Hei & (Hei - 1)));
 
-		//pImage = new Pixel[Wid * Hei];
-		//assert(pImage);
-
 		Mips = (int)log2((double)min(Wid, Hei));
 		pMip = new Pixel*[Mips + 1];
 		assert(pMip);
@@ -158,28 +189,28 @@ public:
 };
 
 
-template <int Size> class Map {
+class Map {
 protected:
+	struct TraceHit {
+		Cell	*pCell;
+		float	TexU;
+		Vec2	Pos;
+
+		TraceHit(Cell *pCell, const float TexU, const Vec2 &Pos) :
+			pCell(pCell), TexU(TexU), Pos(Pos) {}
+	};
+
+	typedef TraceHit (Map::*TraceFunc)(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx);
+	TraceFunc TraceFuncs[4] = {&Map::TraceQ0, &Map::TraceQ1, &Map::TraceQ2, &Map::TraceQ3};
+
 	vector<Cell>	map;
 
 public:
-	/*struct TraceHit {
-		Cell	*pCell;
-		//float	Dist;
-		Vec2	Pos;
-		int		CellX, LastX;
-		int		CellY, LastY;
-
-		TraceHit() : 
-			pCell(nullptr) {}
-
-		TraceHit(Pixel *pCell, const float Dist, const Vec2 &Pos, const int CellX, const int CellY) :
-			pCell(pCell), Dist(Dist), Pos(Coord), CellX(CellX), CellY(CellY) {}
-	};*/
-
+	int Size;
 	int WallHeight;
 
-	Map(const int WallHeight) : WallHeight(WallHeight) {
+	Map(const int Size, const int WallHeight) : 
+		Size(Size), WallHeight(WallHeight) {
 		map = vector<Cell>(Size * Size);
 	}
 
@@ -195,172 +226,14 @@ public:
 			   Pos.y >= 0.0f && Pos.y < (float)Size;
 	}
 
-	/*TraceHit Trace(const Vec2 &Origin, const Vec2 &Step) {
-		TraceHit hit;
-		hit.Pos = Origin;
+	void Scan(Camera &Cam, Graphics *pGfx);
+	void Render(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx);
 
-		hit.LastX = hit.LastY = 0;
-
-		for (; InBounds(hit.Pos); hit.Pos += Step) {
-			hit.CellX = (int)hit.Pos.x;
-			hit.CellY = (int)hit.Pos.y;
-
-			hit.pCell = map.data() + hit.CellX + hit.CellY * Size;
-			
-			if (hit.pCell->pWallTex) {
-				//hit.Dist = (hit.Pos - Origin).Size();
-				return hit;
-			}
-
-			hit.LastX = hit.CellX;
-			hit.LastY = hit.CellY;
-		}
-
-		return TraceHit();
-	}*/
-
-
-	struct TraceHit2 {
-		Cell	*pCell;
-		float	TexU;
-		Vec2	Pos;
-
-		TraceHit2(Cell *pCell, const float TexU, const Vec2 &Pos) :
-			pCell(pCell), TexU(TexU), Pos(Pos) {}
-	};
-
-	TraceHit2 Trace2(const Vec2 &Origin, const float Theta, Graphics *pGfx) {
-		float theta = fmod(Theta + TAU, TAU);
-
-		int quad = 0;
-		for (; theta >= QTAU; theta -= QTAU, quad++);
-
-		static Int2 oppStep[4] = {
-			Int2( 1, 0),	// Quad0: East		00
-			Int2( 1, 0),	// Quad1: South		01
-			Int2(-1, 0),	// Quad2: West		10
-			Int2(-1, 0)		// Quad3: North		11
-		};
-
-		static Int2 adjStep[4] = {
-			Int2(0, -1),	// Quad0: East		00
-			Int2(0,  1),	// Quad1: South		01
-			Int2(0,  1),	// Quad2: West		10
-			Int2(0, -1)		// Quad3: North		11
-		};
-
-		Int2 cellPos(Origin);
-		const Vec2 orgPos = Origin - Vec2(cellPos);
-
-		/*const float orgX = Origin.x - (int)Origin.x;
-		const float orgY = Origin.y - (int)Origin.y;*/
-
-		float opp = orgPos.y * tanf(theta);
-		float pos = orgPos.x + opp;
-		if (pos < 1.0f) {
-			// Hit adjacent wall
-			
-		} else {
-			// Hit opposite wall
-			opp = tanf(QTAU - theta);
-			//opp = (1.0f - orgPos.x) * tanf(QTAU - theta);
-			pos = orgPos.y - (1.0f - orgPos.x) * opp;
-
-			Int2 cellDir = oppStep[quad];
-
-			if (pGfx) {Vec2 OppPos = Vec2(cellPos) + Vec2(1, pos);
-			Point Dst(DebugX + OppPos.x * DebugScl, DebugY + OppPos.y * DebugScl);
-			pGfx->DrawEllipse(&Pen(Color(255, 255,0,0)), Dst.X-2, Dst.Y-2, 4, 4);}
-
-			for (;;) {
-				cellPos += cellDir;
-				if (GetCell(cellPos /* + cellDir*/).IsSolid())
-					break;
-				//cellPos += cellDir;
-
-				if (pos - opp >= 0.0f) {
-					// Hit the opposite wall
-					//cellDir = oppStep[quad];
-					pos -= opp;
-
-					if (pGfx) {Vec2 OppPos = Vec2(cellPos) + Vec2(1, pos);
-					Point Dst(DebugX + OppPos.x * DebugScl, DebugY + OppPos.y * DebugScl);
-					pGfx->DrawEllipse(&Pen(Color(255, 191,0,0)), Dst.X-2, Dst.Y-2, 4, 4);}
-				} else {
-					// Crossed to an adjacent wall
-
-					if (pGfx) {Vec2 OppPos = Vec2(cellPos) + Vec2(pos / opp, 0);
-					Point Dst(DebugX + OppPos.x * DebugScl, DebugY + OppPos.y * DebugScl);
-					pGfx->DrawEllipse(&Pen(Color(255, 0,191,0)), Dst.X-2, Dst.Y-2, 4, 4);}
-
-					//cellDir = adjStep[quad];
-					cellPos += adjStep[quad];
-					if (GetCell(cellPos).IsSolid()) {
-						pos /= opp;	// law of similar triangles simplified
-
-						//return TraceHit2(nullptr, 0, Vec2());
-
-						if (pGfx) {Vec2 OppPos = Vec2(cellPos) + Vec2(pos, 1);
-						Point Dst(DebugX + OppPos.x * DebugScl, DebugY + OppPos.y * DebugScl);
-						pGfx->DrawEllipse(&Pen(Color(255, 0,191,0)), Dst.X-4, Dst.Y-4, 8, 8);}
-
-						return TraceHit2(&GetCell(cellPos), pos, Vec2(cellPos) + Vec2(pos, 1));
-					}
-
-					pos -= opp - 1.0f;
-
-					if (pGfx) {Vec2 OppPos = Vec2(cellPos) + Vec2(1, pos);
-					Point Dst(DebugX + OppPos.x * DebugScl, DebugY + OppPos.y * DebugScl);
-					pGfx->DrawEllipse(&Pen(Color(255, 0,0,191)), Dst.X-2, Dst.Y-2, 4, 4);}
-				}
-
-				if (GetCell(cellPos).IsSolid())
-					break;
-			}
-
-			if (pGfx) {Vec2 OppPos = Vec2(cellPos) + Vec2(0, pos);
-			Point Dst(DebugX + OppPos.x * DebugScl, DebugY + OppPos.y * DebugScl);
-			pGfx->DrawEllipse(&Pen(Color(255, 255,0,0)), Dst.X-4, Dst.Y-4, 8, 8);}
-
-			// We've hit a solid (opposite) wall. Render it!
-			// Render slice at pos
-			return TraceHit2(&GetCell(cellPos), pos, Vec2(cellPos) + Vec2(0, pos));
-			//return TraceHit2(nullptr, 0, Vec2());
-		}
-
-
-		return TraceHit2(nullptr, 0, Vec2());
-	}
-
-	void Scan(Camera &Cam, Graphics *pGfx) {
-		const float slice = Cam.FoV / (float)Cam.Wid;
-		const int halfwid = Cam.Wid / 2;
-
-		Cam.Clear();
-
-		for (int col = 0; col < Cam.Wid; col++) {
-		//int col = halfwid; {
-
-			float ang = (float)(col - halfwid) * slice + Cam.Dir;
-
-			if (pGfx) {
-				/*{Point Org(DebugX + Cam.Pos.x * DebugScl, DebugY + Cam.Pos.y * DebugScl);
-				Point Dst(Org.X + sin(ang) * DebugScl*4, Org.Y - cos(ang) * DebugScl*4);
-				pGfx->DrawLine(&Pen(Color(63, 0,0,255)), Org, Dst);}*/
-			}
-
-			//TraceHit hit = Trace(Cam.Pos, Vec2(sinf(ang), -cosf(ang)) * 0.01f);
-			TraceHit2 hit = Trace2(Cam.Pos, ang, pGfx);
-			
-			if (hit.pCell) {
-				// Ray hit a wall
-				Render(Cam, hit, col, pGfx);
-			} else {
-				// Ray exited the world
-				int x = 0;
-			}
-		}
-	}
+	TraceHit Trace(const Vec2 &Origin, const float Theta, Graphics *pGfx);
+	TraceHit TraceQ0(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx);
+	TraceHit TraceQ1(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx);
+	TraceHit TraceQ2(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx);
+	TraceHit TraceQ3(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx);
 
 	void Debug(Graphics *pGfx) {
 		SolidBrush clrVoid(Color(255,255,255));
@@ -380,101 +253,4 @@ public:
 						DebugScl-1, DebugScl-1);
 			}
 	}
-	
-	void Render(Camera &Cam, const TraceHit2 &Hit, const int Col, Graphics *pGfx) {
-		Texture *pWall = Hit.pCell->pWallTex;
-
-		const float dist = (Hit.Pos - Cam.Pos).Size();
-
-		const float hei = (float)WallHeight / dist;
-		const int half = (int)(hei / 2.0f);
-		const int top = max(Cam.Hei / 2 - half, 0);
-		const int btm = min(Cam.Hei / 2 + half, Cam.Hei);
-
-		//const int mip = 0;
-		//const int mip = min((int)dist, pWall->Mips);
-		const int mip = min((int)sqrtf(dist), pWall->Mips);
-		const int mipWid = pWall->Wid >> mip;
-		const int mipHei = pWall->Hei >> mip;
-
-		const float sclV = (float)mipHei / hei;
-
-		if (pGfx) {
-			Pen clrTrace(Color(255, 0,0, Col / 3));
-			Point Org(DebugX + Cam.Pos.x * DebugScl, DebugY + Cam.Pos.y * DebugScl);
-			Point Dst(DebugX + Hit.Pos.x * DebugScl, DebugY + Hit.Pos.y * DebugScl);
-
-			pGfx->DrawLine(&clrTrace, Org, Dst);
-		}
-
-		const int texU = (int)(Hit.TexU * (float)mipWid);
-		assert(texU >= 0 && texU < mipWid);
-
-		Pixel *pTex = pWall->pMip[mip] + texU;
-		const int utop = Cam.Hei / 2 - half;
-
-		int ofs = Col + top * Cam.Wid;
-		for (int y = top; y < btm; y++, ofs += Cam.Wid) {
-			const int texV = (int)((float)(y - utop) * sclV);
-			assert(texV >= 0 && texV < mipHei);
-			Cam.pImage[ofs] = pTex[texV * mipWid];
-		}
-	}
-
-	/*void Render(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx) {
-		Texture *pWall = Hit.pCell->pWallTex;
-
-		Vec2 path = Hit.Pos - Cam.Pos;
-
-		float fracX = Hit.Pos.x - (float)Hit.CellX;
-		float fracY = Hit.Pos.y - (float)Hit.CellY;
-		float fracU;
-		Vec2 hitPos;
-
-		if (Hit.LastX != Hit.CellX) {
-			// Crossed a vertical boundary
-			fracU = fracY;
-		} else {
-			// Crossed a horizontal boundary
-			fracU = fracX;
-		}
-
-		hitPos = Hit.Pos;
-
-		const float dist = (hitPos - Cam.Pos).Size();
-
-		const float hei = (float)WallHeight / dist;
-		const int half = (int)(hei / 2.0f);
-		const int top = max(Cam.Hei / 2 - half, 0);
-		const int btm = min(Cam.Hei / 2 + half, Cam.Hei);
-
-		//const int mip = 0;
-		//const int mip = min((int)dist, pWall->Mips);
-		const int mip = min((int)sqrtf(dist), pWall->Mips);
-		const int mipWid = pWall->Wid >> mip;
-		const int mipHei = pWall->Hei >> mip;
-
-		const float sclV = (float)mipHei / hei;
-
-		if (pGfx) {
-			Pen clrTrace(Color(31, 0,0,0));
-			Point Org(DebugX + Cam.Pos.x * DebugScl, DebugY + Cam.Pos.y * DebugScl);
-			Point Dst(DebugX + Hit.Pos.x * DebugScl, DebugY + Hit.Pos.y * DebugScl);
-
-			pGfx->DrawLine(&clrTrace, Org, Dst);
-		}
-
-		const int texU = (int)(fracU * (float)mipWid);
-		assert(texU >= 0 && texU < mipWid);
-
-		Pixel *pTex = pWall->pMip[mip] + texU;
-		const int utop = Cam.Hei / 2 - half;
-
-		int ofs = Col + top * Cam.Wid;
-		for (int y = top; y < btm; y++, ofs += Cam.Wid) {
-			const int texV = (int)((float)(y - utop) * sclV);
-			assert(texV >= 0 && texV < mipHei);
-			Cam.pImage[ofs] = pTex[texV * mipWid];
-		}
-	}*/
 };
