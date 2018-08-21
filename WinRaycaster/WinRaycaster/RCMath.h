@@ -100,6 +100,10 @@ template <typename Type> struct TempVect2D {
 		y += other.y;
 	}
 
+	TempVect2D operator * (const TempVect2D &other) const {
+		return TempVect2D(x * other.x, y * other.y);
+	}
+
 	TempVect2D operator * (const Type scalar) const {
 		return TempVect2D(x * scalar, y * scalar);
 	}

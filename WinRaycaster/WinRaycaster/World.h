@@ -1,7 +1,23 @@
 #pragma once
 
 
+//#define SCRN_W	1920
+//#define SCRN_H	1080
+
+#define SCRN_W	1280
+#define SCRN_H	720
+
+//#define SCRN_W	960
+//#define SCRN_H	540
+
+//#define MIP_BIAS	2048.f/1080.f*1.1f
+#define MIP_BIAS	(256.f/(float)SCRN_H*1.1f)
+
+#define THREADCOUNT	8
+
+
 __declspec(selectany) float DebugX, DebugY, DebugScl;
+
 
 #define Plot(PlotX, PlotY, Rad, color) {									\
 	if (pGfx) {																\
@@ -17,6 +33,12 @@ class Pixel {
 protected:
 	static unsigned ScaleBy(const unsigned A, const unsigned Mul) {
 		return (A * Mul) >> 8;
+	}
+
+	static unsigned LerpBy(const unsigned A, const unsigned B, const unsigned Alpha) {
+		// C = A * alpha + (1 - Alpha) * B
+		// C = A + (B - A) * Alpha  << Faster
+		return A + (((B - A) * Alpha) >> 8);
 	}
 
 public:
@@ -57,55 +79,13 @@ public:
 	inline Pixel operator+ (const Pixel &Other) const {
 		return argb + Other.argb;
 	}
-};
 
-
-class Camera {
-public:
-	Vec2	Pos;
-	float	Dir;
-	float	FoV;
-
-	int		Wid;
-	int		Hei;
-
-	Pixel	*pImage;
-	Bitmap	*pBmp;
-
-	Camera(const int Wid, const int Hei) :
-		Wid(Wid), Hei(Hei) {
-
-		pImage = new Pixel[Wid * Hei];
-		assert(pImage);
-
-		pBmp = new Bitmap(Wid, Hei, PixelFormat32bppARGB);
-		assert(pBmp);
-	}
-
-	void Clear() {
-		assert(pImage);
-		//memset(pImage, 0, Wid * Hei * sizeof(Pixel));
-		for (int i = 0; i < Wid * Hei; pImage[i++] = 0xFF000000);
-	}
-
-	void Display(Graphics *pGfx) {
-		assert(pImage && pBmp && pGfx);
-		
-		BitmapData bd;
-		if (pBmp->LockBits(NULL, ImageLockModeWrite, PixelFormat32bppARGB, &bd) != Ok)
-			return;
-		
-		assert(bd.Width == Wid && bd.Height == Hei);
-		
-		const int stride = abs(bd.Stride) / sizeof(Pixel);
-
-		for (int row = 0; row < Hei; row++) {
-			memcpy((Pixel*)bd.Scan0 + row * stride, pImage + row * Wid, Wid * sizeof(Pixel));
-		}
-
-		pBmp->UnlockBits(&bd);
-		pGfx->DrawImage(pBmp, 0, 0);
-		//pGfx->DrawImage(pBmp, 0, 0, Wid * 2, Hei * 2);
+	inline static Pixel Lerp(const Pixel &A, const Pixel &B, const float Alpha) {
+		const unsigned alpha = (unsigned)(Alpha * 256.0f);
+		return Pixel(255, 
+					 LerpBy(A.Red(),   B.Red(),   alpha),
+					 LerpBy(A.Green(), B.Green(), alpha), 
+					 LerpBy(A.Blue(),  B.Blue(),  alpha));
 	}
 };
 
@@ -173,6 +153,97 @@ public:
 			}
 		}
 	}
+
+	inline Pixel& Sample(const Int2 &Pos, const int mip) const {
+		return pMip[mip][Pos.y * MipDim(mip, Wid) + Pos.x];
+	}
+
+	Pixel Bilerp(const Vec2 &TexUV, const int mip) const {
+		assert(mip < Mips);
+		const int mipWid = MipDim(mip, Wid);
+		const int mipHei = MipDim(mip, Hei);
+
+		//assert(TexUV.x>=0.0f);
+
+		Vec2 mipPos = TexUV * Vec2(mipWid, mipHei);
+
+		Int2 uvPos(mipPos);
+		
+		Vec2 uv = mipPos - uvPos;
+		
+		if (uv.x < 0.0f)
+			uv.x += 1.0f;
+
+		if (uv.y < 0.0f)
+			uv.y += 1.0f;
+
+		uvPos.x &= mipWid - 1;
+		uvPos.y &= mipHei - 1;
+
+		Int2 uvOpp = uvPos + Int2(1, 1);
+		uvOpp.x &= mipWid - 1;	// Wrap using and instead of modulus. mipWid / mipHei must be a power of 2.
+		uvOpp.y &= mipHei - 1;
+
+		const Pixel &tl = Sample(Int2(uvPos.x, uvPos.y), mip);
+		const Pixel &tr = Sample(Int2(uvOpp.x, uvPos.y), mip);
+		const Pixel &bl = Sample(Int2(uvPos.x, uvOpp.y), mip);
+		const Pixel &br = Sample(Int2(uvOpp.x, uvOpp.y), mip);
+
+		const Pixel t = Pixel::Lerp(tl, tr, uv.x);
+		const Pixel b = Pixel::Lerp(bl, br, uv.x);
+
+		return Pixel::Lerp(t, b, uv.y);
+	}
+};
+
+
+class Camera {
+public:
+	Vec2	Pos;
+	float	Dir;
+	float	FoV;
+
+	int		Wid;
+	int		Hei;
+
+	Pixel	*pImage;
+	Bitmap	*pBmp;
+
+	Camera(const int Wid, const int Hei) :
+		Wid(Wid), Hei(Hei) {
+
+		pImage = new Pixel[Wid * Hei];
+		assert(pImage);
+
+		pBmp = new Bitmap(Wid, Hei, PixelFormat32bppARGB);
+		assert(pBmp);
+	}
+
+	void Clear() {
+		assert(pImage);
+		//memset(pImage, 0, Wid * Hei * sizeof(Pixel));
+		for (int i = 0; i < Wid * Hei; pImage[i++] = 0xFF000000);
+	}
+
+	void Display(Graphics *pGfx) {
+		assert(pImage && pBmp && pGfx);
+
+		BitmapData bd;
+		if (pBmp->LockBits(NULL, ImageLockModeWrite, PixelFormat32bppARGB, &bd) != Ok)
+			return;
+
+		assert(bd.Width == Wid && bd.Height == Hei);
+
+		const int stride = abs(bd.Stride) / sizeof(Pixel);
+
+		for (int row = 0; row < Hei; row++) {
+			memcpy((Pixel*)bd.Scan0 + row * stride, pImage + row * Wid, Wid * sizeof(Pixel));
+		}
+
+		pBmp->UnlockBits(&bd);
+		pGfx->DrawImage(pBmp, 0, 0);
+		//pGfx->DrawImage(pBmp, 0, 0, Wid * 2, Hei * 2);
+	}
 };
 
 
@@ -189,19 +260,20 @@ public:
 };
 
 
+struct TraceHit {
+	Cell	*pCell;
+	float	TexU;
+	Vec2	Pos;
+
+	TraceHit(Cell *pCell, const float TexU, const Vec2 &Pos) :
+		pCell(pCell), TexU(TexU), Pos(Pos) {}
+};
+
+
 class Map {
 protected:
-	struct TraceHit {
-		Cell	*pCell;
-		float	TexU;
-		Vec2	Pos;
-
-		TraceHit(Cell *pCell, const float TexU, const Vec2 &Pos) :
-			pCell(pCell), TexU(TexU), Pos(Pos) {}
-	};
-
-	typedef TraceHit (Map::*TraceFunc)(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx);
-	TraceFunc TraceFuncs[4] = {&Map::TraceQ0, &Map::TraceQ1, &Map::TraceQ2, &Map::TraceQ3};
+	typedef TraceHit (Map::*TraceFunc)(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
+	const TraceFunc TraceFuncs[4] = {&Map::TraceQ0, &Map::TraceQ1, &Map::TraceQ2, &Map::TraceQ3};
 
 	vector<Cell>	map;
 
@@ -221,19 +293,27 @@ public:
 		return map[Pos.x + Pos.y * Size];
 	}
 
+	inline Cell* CellPtr(const Int2 &Pos) const {
+		assert(Pos.x >= 0 && Pos.x < Size);
+		assert(Pos.y >= 0 && Pos.y < Size);
+
+		return (Cell*)map.data() + Pos.x + Pos.y * Size;
+	}
+
 	inline bool InBounds(const Vec2 &Pos) const {
 		return Pos.x >= 0.0f && Pos.x < (float)Size && 
 			   Pos.y >= 0.0f && Pos.y < (float)Size;
 	}
 
-	void Scan(Camera &Cam, Graphics *pGfx);
-	void Render(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx);
+	void Scan(Camera &Cam, Graphics *pGfx) const;
+	void Render(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx) const;
+	void Render2(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx) const;
 
-	TraceHit Trace(const Vec2 &Origin, const float Theta, Graphics *pGfx);
-	TraceHit TraceQ0(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx);
-	TraceHit TraceQ1(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx);
-	TraceHit TraceQ2(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx);
-	TraceHit TraceQ3(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx);
+	TraceHit Trace(const Vec2 &Origin, const float Theta, Graphics *pGfx) const;
+	TraceHit TraceQ0(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
+	TraceHit TraceQ1(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
+	TraceHit TraceQ2(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
+	TraceHit TraceQ3(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
 
 	void Debug(Graphics *pGfx) {
 		SolidBrush clrVoid(Color(255,255,255));
@@ -252,5 +332,140 @@ public:
 						DebugX + x * DebugScl, DebugY + y * DebugScl, 
 						DebugScl-1, DebugScl-1);
 			}
+	}
+};
+
+
+typedef CRITICAL_SECTION Critical;
+
+class Thread {
+protected:
+	HANDLE		hRun;		// Main thread will raise this event (Wake) when there's work to do (or we should stop).
+	HANDLE		hStop;		// This thread will raise this event when it has stopped working (forever).
+	Critical	*pCS;
+	bool		Abort;
+
+	static void ThreadFunc(void *pThis);
+
+public:
+	Thread(Critical *pCS) : pCS(pCS), Abort(false) {
+		hRun = CreateEvent(NULL, FALSE, FALSE, NULL);
+		hStop = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+		_beginthread(ThreadFunc, 0, this);
+	}
+
+	~Thread() {
+		Abort = true;
+		SetEvent(hRun);
+		WaitForSingleObject(hStop, INFINITE);
+		CloseHandle(hStop);
+		CloseHandle(hRun);
+	}
+
+	void Wake() {
+		SetEvent(hRun);
+	}
+};
+
+
+class Game {
+public:
+	//Input input;
+	Critical	CS;
+	HANDLE		hDone;
+	int			ThreadCol;
+	int			DoneCol;
+
+	Graphics	*pGfx = nullptr;
+	Camera		*pCam = nullptr;
+	Map			*pMap = nullptr;
+
+	vector<Texture> Textures;
+
+	vector<Thread*>	Threads;
+
+	Game() {
+		InitializeCriticalSectionAndSpinCount(&CS, 256);
+		hDone = CreateEvent(NULL, FALSE, FALSE, NULL);
+	}
+
+	~Game() {
+		CloseHandle(hDone);
+		DeleteCriticalSection(&CS);
+
+		for (Thread *thread : Threads)
+			delete thread;
+	}
+
+	void InitGame() {
+		pCam = new Camera(SCRN_W, SCRN_H);
+		pCam->Pos = Vec2(5.5f, 5.5f);
+		pCam->Dir = 0.0f * Ang2Rad;
+		pCam->FoV = 90.0f * Ang2Rad;
+
+		//HRESULT res = input.Initialize(hInst, hWnd, SCRN_W, SCRN_H);
+		Textures.push_back(Texture(L"textures\\wall1.png"));
+		//Textures.push_back(Texture(L"textures\\align.png"));
+		//Textures.push_back(Texture(L"textures\\red-brick-wall-living-room-india-effect-ireland-kitchen-shaped-good-looking-uv-h-cm-jpg-iida-comp-pinterest.jpg"));
+		
+
+		InitMap();
+
+		for (int i = 0; i < THREADCOUNT; i++)
+			Threads.push_back(new Thread(&CS));
+	}
+
+	void InitMap() {
+		const int Size = 11, s = Size - 1;
+
+		pMap = new Map(Size, SCRN_H);
+
+		const Pixel R(0xFFFF0000);
+		const Pixel G(0xFF00FF00);
+		const Pixel B(0xFF00007F);
+
+		for (int i = 0; i < Size; i++) {
+			pMap->GetCell(Int2(i, 0)).pWallTex = &Textures[0];
+			pMap->GetCell(Int2(0, i)).pWallTex = &Textures[0];
+			pMap->GetCell(Int2(i, s)).pWallTex = &Textures[0];
+			pMap->GetCell(Int2(s, i)).pWallTex = &Textures[0];
+		}
+
+		pMap->GetCell(Int2(3, 3)).pWallTex = &Textures[0];
+		pMap->GetCell(Int2(7, 3)).pWallTex = &Textures[0];
+		pMap->GetCell(Int2(3, 7)).pWallTex = &Textures[0];
+		pMap->GetCell(Int2(7, 7)).pWallTex = &Textures[0];
+	}
+
+	void Tick(float deltaTime, HWND hWnd) {
+		if (!pCam)
+			return;
+
+		pCam->Pos = Vec2(5.5, 4.5) + Vec2(sinf(-pCam->Dir * 2.5f), cosf(-pCam->Dir) * 2.0f);
+
+		//pMap->Debug(pGfx);
+		//pMap->Scan(*pCam, pGfx);
+
+		//pMap->Scan(*pCam, nullptr);
+
+
+		pCam->Clear();
+		ThreadCol = DoneCol = 0;
+
+		for (Thread *thread : Threads)
+			thread->Wake();
+
+		WaitForSingleObject(hDone, INFINITE);
+
+
+		pCam->Dir += 5.0f * Ang2Rad * deltaTime;
+		//pCam->Dir = fmod(pCam->Dir + 10.0f * Ang2Rad * deltaTime + QTAU, QTAU) - ETAU;
+
+		return;
+	}
+
+	void Render() {
+		pCam->Display(pGfx);
 	}
 };
