@@ -26,6 +26,101 @@ struct Rotator {
 	struct Vec2 ToVector();
 };*/
 
+
+
+template <int FracBits, typename IntType, typename LongType> class FixedFloat {
+protected:
+	static FixedFloat Construct(IntType RawValue) {
+		FixedFloat fixed;
+		fixed.Value = RawValue;
+		return fixed;
+	}
+
+	static const IntType FracMask = (1 << FracBits) - 1;
+
+	static float FracFlt() {
+		return 1.0f / (float)(1 << FracBits);
+	}
+
+	static double FracDbl() {
+		return 1.0 / (double)(1 << FracBits);
+	}
+
+public:
+	IntType	Value;
+
+	FixedFloat() {}
+
+	FixedFloat(const FixedFloat &Other) :
+		Value(Other.Value) {}
+
+	template <typename OtherType> FixedFloat(const OtherType Value) :
+		Value((IntType)(Value * (OtherType)(1 << FracBits))) {}
+
+	template <int OtherFracBits> FixedFloat(const FixedFloat<OtherFracBits, IntType, LongType> &Value) :
+		Value((OtherFracBits > FracBits) ? (Value.Value >> (OtherFracBits - FracBits)) : (Value.Value << (FracBits - OtherFracBits))) {}
+
+	inline FixedFloat& operator= (const FixedFloat &Other) {
+		Value = Other.Value;
+		return *this;
+	}
+
+	inline FixedFloat operator+ (const FixedFloat &Other) const {
+		return Construct(Value + Other.Value);
+	}
+
+	inline FixedFloat operator- (const FixedFloat &Other) const {
+		return Construct(Value - Other.Value);
+	}
+
+	inline FixedFloat operator* (const FixedFloat &Other) const {
+		//return Construct((Value * Other.Value) >> FracBits);
+		//return Construct(Value * (Other.Value >> FracBits) + (Value * (Other.Value & FracMask)));
+		return Construct((IntType)(((LongType)Value * (LongType)Other.Value) >> FracBits));
+	}
+
+	inline FixedFloat operator/ (const FixedFloat &Other) const {
+		//return Construct((Value << FracBits) / Other.Value);
+		return Construct((IntType)(((LongType)Value << FracBits) / (LongType)Other.Value));
+	}
+
+	inline FixedFloat& operator+= (const FixedFloat &Other) const {
+		*this = *this + Other;
+		return *this;
+	}
+
+	inline FixedFloat& operator-= (const FixedFloat &Other) const {
+		*this = *this - Other;
+		return *this;
+	}
+
+	inline FixedFloat& operator*= (const FixedFloat &Other) const {
+		*this = *this * Other;
+		return *this;
+	}
+
+	inline FixedFloat& operator/= (const FixedFloat &Other) const {
+		*this = *this / Other;
+		return *this;
+	}
+
+	inline double AsInteger() const {
+		return Value >> FracBits;
+	}
+
+	inline float AsFloat() const {
+		return (float)(Value >> FracBits) + (float)(Value & FracMask) * FracFlt();
+	}
+
+	inline double AsDouble() const {
+		return (double)(Value >> FracBits) + (double)(Value & FracMask) * FracDbl();
+	}
+};
+
+typedef FixedFloat<8, long, long long> Fixed8;
+typedef FixedFloat<16, long, long long> Fixed16;
+
+
 template <typename Type> struct TempVect2D {
 	Type x, y;
 
@@ -116,3 +211,4 @@ template <typename Type> struct TempVect2D {
 
 typedef TempVect2D<float>	Vec2;
 typedef TempVect2D<int>		Int2;
+typedef TempVect2D<Fixed16>	Fixed2;
