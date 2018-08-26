@@ -34,10 +34,11 @@ GetAnother:
 			game.pGfx->DrawLine(&Pen(Color(63, 0,0,255)), Org, Dst);
 		}
 
-		TraceHit hit = game.pMap->Trace(Cam.Pos, ang, game.pGfx);
+		// Type should be a templated map type
+		auto hit = game.pMap->Trace(Cam.Pos, ang, nullptr); //game.pGfx);
 
 		if (hit.pCell)
-			game.pMap->Render2(Cam, hit, col, game.pGfx);
+			game.pMap->Render2(Cam, hit, col, nullptr); //game.pGfx);
 
 		EnterCriticalSection(&game.CS);
 
@@ -55,8 +56,8 @@ GetAnother:
 	SetEvent(thread.hStop);
 }
 
-
-void Map::Scan(Camera &Cam, Graphics *pGfx) const {
+//template <typename Type>
+/*void Map::Scan(Camera &Cam, Graphics *pGfx) const {
 	const float slice = Cam.FoV / (float)Cam.Wid;
 	const int halfwid = Cam.Wid / 2;
 
@@ -74,61 +75,63 @@ void Map::Scan(Camera &Cam, Graphics *pGfx) const {
 			pGfx->DrawLine(&Pen(Color(63, 0,0,255)), Org, Dst);
 		}
 
-		TraceHit hit = Trace(Cam.Pos, ang, pGfx);
+		//TraceHit hit = Trace(Cam.Pos, ang, pGfx);
+		Hit hit = Trace(Cam.Pos, ang, pGfx);
 
 		if (hit.pCell)
 			Render(Cam, hit, col, pGfx);
 	}
-}
+}*/
 
 
-void Map::Render(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx) const {
-	Texture *pWall = Hit.pCell->pWallTex;
+//void Map::Render(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx) const {
+//	Texture *pWall = Hit.pCell->pWallTex;
+//
+//	const float dist = (Hit.Pos - Cam.Pos).Size();
+//
+//	const float hei = (float)WallHeight / dist;
+//	const int half = (int)(hei / 2.0f);
+//	const int top = max(Cam.Hei / 2 - half, 0);
+//	const int btm = min(Cam.Hei / 2 + half, Cam.Hei);
+//
+//	//const int mip = 0;
+//	//const int mip = min((int)dist, pWall->Mips);
+//	const float sqrDist = sqrtf(dist);
+//	const int mip = min((int)(sqrDist * MIP_BIAS), pWall->Mips);
+//	const int mipWid = pWall->Wid >> mip;
+//	const int mipHei = pWall->Hei >> mip;
+//
+//	const float sclV = (float)mipHei / hei;
+//
+//	if (pGfx) {
+//		Pen clrTrace(Color(255, 0,0, Col / 3));
+//		Point Org((int)(DebugX + Cam.Pos.x * DebugScl), (int)(DebugY + Cam.Pos.y * DebugScl));
+//		Point Dst((int)(DebugX + Hit.Pos.x * DebugScl), (int)(DebugY + Hit.Pos.y * DebugScl));
+//
+//		pGfx->DrawLine(&clrTrace, Org, Dst);
+//	}
+//
+//	const int texU = (int)(Hit.TexU * (float)mipWid) & (mipWid - 1);
+//
+//	Pixel *pTex = pWall->pMip[mip] + texU;
+//	const int utop = Cam.Hei / 2 - half;
+//
+//	const int mul = (int)(256.0f / max(sqrDist, 1.0f));
+//
+//	int ofs = Col + top * Cam.Wid;
+//	for (int y = top; y < btm; y++, ofs += Cam.Wid) {
+//		const int texV = (int)((float)(y - utop) * sclV);
+//		assert(texV >= 0 && texV < mipHei);
+//		Cam.pImage[ofs] = pTex[texV * mipWid].Scale(mul);
+//	}
+//}
 
-	const float dist = (Hit.Pos - Cam.Pos).Size();
 
-	const float hei = (float)WallHeight / dist;
-	const int half = (int)(hei / 2.0f);
-	const int top = max(Cam.Hei / 2 - half, 0);
-	const int btm = min(Cam.Hei / 2 + half, Cam.Hei);
+//template <typename Type>
+void Map::Render2(Camera &Cam, const Hit &hit, const int Col, Graphics *pGfx) const {
+	Texture *pWall = hit.pCell->pWallTex;
 
-	//const int mip = 0;
-	//const int mip = min((int)dist, pWall->Mips);
-	const float sqrDist = sqrtf(dist);
-	const int mip = min((int)(sqrDist * MIP_BIAS), pWall->Mips);
-	const int mipWid = pWall->Wid >> mip;
-	const int mipHei = pWall->Hei >> mip;
-
-	const float sclV = (float)mipHei / hei;
-
-	if (pGfx) {
-		Pen clrTrace(Color(255, 0,0, Col / 3));
-		Point Org((int)(DebugX + Cam.Pos.x * DebugScl), (int)(DebugY + Cam.Pos.y * DebugScl));
-		Point Dst((int)(DebugX + Hit.Pos.x * DebugScl), (int)(DebugY + Hit.Pos.y * DebugScl));
-
-		pGfx->DrawLine(&clrTrace, Org, Dst);
-	}
-
-	const int texU = (int)(Hit.TexU * (float)mipWid) & (mipWid - 1);
-
-	Pixel *pTex = pWall->pMip[mip] + texU;
-	const int utop = Cam.Hei / 2 - half;
-
-	const int mul = (int)(256.0f / max(sqrDist, 1.0f));
-
-	int ofs = Col + top * Cam.Wid;
-	for (int y = top; y < btm; y++, ofs += Cam.Wid) {
-		const int texV = (int)((float)(y - utop) * sclV);
-		assert(texV >= 0 && texV < mipHei);
-		Cam.pImage[ofs] = pTex[texV * mipWid].Scale(mul);
-	}
-}
-
-
-void Map::Render2(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx) const {
-	Texture *pWall = Hit.pCell->pWallTex;
-
-	const float dist = (Hit.Pos - Cam.Pos).Size();
+	const float dist = (hit.Pos - Cam.Pos).Size();
 
 	const float hei = (float)WallHeight / dist;
 	const int half = (int)(hei / 2.0f);
@@ -138,64 +141,72 @@ void Map::Render2(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGf
 	const float sqrDist = sqrtf(dist);
 	const int mip  = min((int)(sqrDist * MIP_BIAS), pWall->Mips);
 	const int mip2 = min((int)(sqrDist * MIP_BIAS) - 1, pWall->Mips);
-	const float mipa = sqrDist * MIP_BIAS - (float)mip;
+	const FLOATTYPE mipa = sqrDist * MIP_BIAS - (FLOATTYPE)mip;
 
 	if (pGfx) {
 		Pen clrTrace(Color(255, 0,0, Col / 3));
 		Point Org((int)(DebugX + Cam.Pos.x * DebugScl), (int)(DebugY + Cam.Pos.y * DebugScl));
-		Point Dst((int)(DebugX + Hit.Pos.x * DebugScl), (int)(DebugY + Hit.Pos.y * DebugScl));
+		Point Dst((int)(DebugX + (float)hit.Pos.x * DebugScl), (int)(DebugY + (float)hit.Pos.y * DebugScl));
 
 		pGfx->DrawLine(&clrTrace, Org, Dst);
 	}
 
-	Vec2 texUV(Hit.TexU, 0);
+	//typedef FixedFloat<24, long, long long> TexFlt;
+	typedef FLOATTYPE TexFlt;
+	typedef TempVect2D<TexFlt> TexVec;
 
-	const float sclV = 1.0f / (float)hei;
+	TexVec texUV(hit.TexU, 0);
+
+	const TexFlt sclV = 1.0f / (float)hei;
 	const int utop = Cam.Hei / 2 - half;
 	const int mul = (int)(256.0f / max(sqrDist, 1.0f));
 
+	texUV.y = (TexFlt)(top - utop) * sclV;
+
 	int ofs = Col + top * Cam.Wid;
 	for (int y = top; y < btm; y++, ofs += Cam.Wid) {
-		texUV.y = (float)(y - utop) * sclV;
-		
+		//texUV.y = (FLOATTYPE)(y - utop) * sclV;
+		texUV.y += sclV;
+
 		Pixel p = pWall->Bilerp(texUV, mip).Scale(mul);
 		
 		if (mip && mip != mip2) {
-			Pixel q = pWall->Bilerp(texUV, mip - 1).Scale(mul);
+			Pixel q = pWall->Bilerp(texUV, mip2).Scale(mul);
 			
-			p = Pixel::Lerp(q, p, mipa);
+			p = Pixel::FLerp(q, p, mipa);
 		}
 		
 		Cam.pImage[ofs] = p;
 	}
 }
 
-
-TraceHit Map::Trace(const Vec2 &Origin, const float Theta, Graphics *pGfx) const {
-	//float theta = fmod(Theta + TAU, TAU);
+//template<typename FLOATTYPE>
+Hit Map::Trace(const Vect &Origin, const FLOATTYPE Theta, Graphics *pGfx) const {
+	//FLOATTYPE theta = fmod(Theta + TAU, TAU);
 	//assert(theta >= 0.0f);
 
 	//int quad = (int)((theta + ETAU) / QTAU /*+ FLT_EPSILON*/) & 3;
 	//theta = fmodf(theta + ETAU, QTAU) - ETAU;
 	
-	int quad = (int)((Theta + ETAU) / QTAU) & 3;
+	int quad = (int)((Theta + FLOATTYPE(ETAU)) / FLOATTYPE(QTAU)) & 3;
 
 	Int2 cellPos(Origin);
-	Vec2 orgPos = Origin - Vec2(cellPos);
+	Vect orgPos = Origin - Vect(cellPos);
 
 	if (CellPtr(cellPos)->IsSolid())
-		return TraceHit(nullptr, 0, Vec2());
+		return Hit(nullptr, 0, Vect());
 
 	//return (this->*TraceFuncs[quad])(cellPos, orgPos, theta, pGfx);
 	return (this->*TraceFuncs[quad])(cellPos, orgPos, Theta, pGfx);
 }
 
 
-TraceHit Map::TraceQ0(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const {
-	//return TraceHit(nullptr, 0, Vec2());
+//template<typename FLOATTYPE>
+Hit Map::TraceQ0(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const {
+	//return Hit(nullptr, 0, Vect());
 
-	float opp = tanf(theta), com = tanf(QTAU - theta);
-	float pos = orgPos.x + orgPos.y * opp;
+	FLOATTYPE opp = tanf(theta), com = tanf(FLOATTYPE(QTAU) - theta);
+	FLOATTYPE pos = orgPos.x + orgPos.y * opp;
 
 	for (;;) {
 		if (pos < 0.0f) {
@@ -204,9 +215,10 @@ TraceHit Map::TraceQ0(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 
 			cellPos.x--;
 			if (CellPtr(cellPos)->IsSolid()) {
+				//return Hit(nullptr, 0, Vect());
 				pos = (1.0f - pos) * -com;
 				Plot(1, pos, 6, Color(255, 0,0,255));
-				return TraceHit(CellPtr(cellPos), -pos, Vec2(cellPos) + Vec2(1, pos));
+				return Hit(CellPtr(cellPos), -pos, Vect(cellPos) + Vect(1, pos));
 			}
 		} else if (pos > 1.0f) {
 			pos -= 1.0f;
@@ -216,7 +228,7 @@ TraceHit Map::TraceQ0(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 			if (CellPtr(cellPos)->IsSolid()) {
 				pos *= com;
 				Plot(0, pos, 6, Color(255, 0,191,0));
-				return TraceHit(CellPtr(cellPos), pos, Vec2(cellPos) + Vec2(0, pos));
+				return Hit(CellPtr(cellPos), pos, Vect(cellPos) + Vect(0, pos));
 			}
 		} else {
 			Plot(pos, 0, 2, Color(255, 255,0,0));
@@ -224,7 +236,7 @@ TraceHit Map::TraceQ0(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 			cellPos.y--;
 			if (CellPtr(cellPos)->IsSolid()) {
 				Plot(pos, 1, 6, Color(255, 255,0,0));
-				return TraceHit(CellPtr(cellPos), pos, Vec2(cellPos) + Vec2(pos, 1));
+				return Hit(CellPtr(cellPos), pos, Vect(cellPos) + Vect(pos, 1));
 			}
 
 			pos += opp;
@@ -232,12 +244,12 @@ TraceHit Map::TraceQ0(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 	}
 }
 
+//template<typename FLOATTYPE>
+Hit Map::TraceQ1(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const {
+	//return Hit(nullptr, 0, Vect());
 
-TraceHit Map::TraceQ1(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const {
-	//return TraceHit(nullptr, 0, Vec2());
-
-	float opp = tanf(QTAU - theta), com = tanf(theta);
-	float pos = orgPos.y - (1.0f - orgPos.x) * opp;
+	FLOATTYPE opp = tanf(FLOATTYPE(QTAU) - theta), com = tanf(theta);
+	FLOATTYPE pos = orgPos.y - (1.0f - orgPos.x) * opp;
 
 	for (;;) {
 		if (pos < 0.0f) {
@@ -248,7 +260,7 @@ TraceHit Map::TraceQ1(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 			if (CellPtr(cellPos)->IsSolid()) {
 				pos = 1.0f - (1.0f - pos) * com;
 				Plot(pos, 1, 6, Color(255, 0,0,255));
-				return TraceHit(CellPtr(cellPos), pos, Vec2(cellPos) + Vec2(pos, 1));
+				return Hit(CellPtr(cellPos), pos, Vect(cellPos) + Vect(pos, 1));
 			}
 		} else if (pos > 1.0f) {
 			pos -= 1.0f;
@@ -258,7 +270,7 @@ TraceHit Map::TraceQ1(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 			if (CellPtr(cellPos)->IsSolid()) {
 				pos = 1.0f - pos * -com;
 				Plot(pos, 0, 6, Color(255, 0,191,0));
-				return TraceHit(CellPtr(cellPos), -pos, Vec2(cellPos) + Vec2(pos, 0));
+				return Hit(CellPtr(cellPos), -pos, Vect(cellPos) + Vect(pos, 0));
 			}
 		} else {
 			Plot(1, pos, 2, Color(255, 255,0,0));
@@ -266,7 +278,7 @@ TraceHit Map::TraceQ1(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 			cellPos.x++;
 			if (CellPtr(cellPos)->IsSolid()) {
 				Plot(0, pos, 6, Color(255, 255,0,0));
-				return TraceHit(CellPtr(cellPos), pos, Vec2(cellPos) + Vec2(0, pos));
+				return Hit(CellPtr(cellPos), pos, Vect(cellPos) + Vect(0, pos));
 			}
 
 			pos -= opp;
@@ -274,12 +286,12 @@ TraceHit Map::TraceQ1(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 	}
 }
 
+//template<typename FLOATTYPE>
+typename Hit Map::TraceQ2(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const {
+	//return Hit(nullptr, 0, Vect());
 
-TraceHit Map::TraceQ2(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const {
-	//return TraceHit(nullptr, 0, Vec2());
-
-	float opp = tanf(theta), com = tanf(QTAU - theta);
-	float pos = orgPos.x - (1.0f - orgPos.y) * opp;
+	FLOATTYPE opp = tanf(theta), com = tanf(FLOATTYPE(QTAU) - theta);
+	FLOATTYPE pos = orgPos.x - (1.0f - orgPos.y) * opp;
 	
 	for (;;) {
 		if (pos < 0.0f) {
@@ -290,7 +302,7 @@ TraceHit Map::TraceQ2(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 			if (CellPtr(cellPos)->IsSolid()) {
 				pos = 1.0f - (1.0f - pos) * com;
 				Plot(1, pos, 6, Color(255, 0,0,255));
-				return TraceHit(CellPtr(cellPos), -pos, Vec2(cellPos) + Vec2(1, pos));
+				return Hit(CellPtr(cellPos), -pos, Vect(cellPos) + Vect(1, pos));
 			}
 		} else if (pos > 1.0f) {
 			pos -= 1.0f;
@@ -300,7 +312,7 @@ TraceHit Map::TraceQ2(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 			if (CellPtr(cellPos)->IsSolid()) {
 				pos = 1.0f + pos * com;
 				Plot(0, pos, 6, Color(255, 0,191,0));
-				return TraceHit(CellPtr(cellPos), pos, Vec2(cellPos) + Vec2(0, pos));
+				return Hit(CellPtr(cellPos), pos, Vect(cellPos) + Vect(0, pos));
 			}
 		} else {
 			Plot(pos, 1, 2, Color(255, 255,0,0));
@@ -308,7 +320,7 @@ TraceHit Map::TraceQ2(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 			cellPos.y++;
 			if (CellPtr(cellPos)->IsSolid()) {
 				Plot(pos, 0, 6, Color(255, 255,0,0));
-				return TraceHit(CellPtr(cellPos), -pos, Vec2(cellPos) + Vec2(pos, 0));
+				return Hit(CellPtr(cellPos), -pos, Vect(cellPos) + Vect(pos, 0));
 			}
 
 			pos -= opp;
@@ -317,11 +329,12 @@ TraceHit Map::TraceQ2(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 }
 
 
-TraceHit Map::TraceQ3(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const {
-	//return TraceHit(nullptr, 0, Vec2());
+//template<typename FLOATTYPE>
+Hit Map::TraceQ3(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const {
+	//return Hit(nullptr, 0, Vect());
 
-	float opp = tanf(QTAU - theta), com = tanf(theta);
-	float pos = orgPos.y + orgPos.x * opp;
+	FLOATTYPE opp = tanf(FLOATTYPE(QTAU) - theta), com = tanf(theta);
+	FLOATTYPE pos = orgPos.y + orgPos.x * opp;
 
 	for (;;) {
 		if (pos < 0.0f) {
@@ -332,7 +345,7 @@ TraceHit Map::TraceQ3(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 			if (CellPtr(cellPos)->IsSolid()) {
 				pos = (1.0f - pos) * -com;
 				Plot(pos, 1, 6, Color(255, 0,0,255));
-				return TraceHit(CellPtr(cellPos), pos, Vec2(cellPos) + Vec2(pos, 1));
+				return Hit(CellPtr(cellPos), pos, Vect(cellPos) + Vect(pos, 1));
 			}
 		} else if (pos > 1.0f) {
 			pos -= 1.0f;
@@ -342,7 +355,7 @@ TraceHit Map::TraceQ3(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 			if (CellPtr(cellPos)->IsSolid()) {
 				pos *= com;
 				Plot(pos, 0, 6, Color(255, 0,191,0));
-				return TraceHit(CellPtr(cellPos), -pos, Vec2(cellPos) + Vec2(pos, 0));
+				return Hit(CellPtr(cellPos), -pos, Vect(cellPos) + Vect(pos, 0));
 			}
 		} else {
 			Plot(0, pos, 2, Color(255, 255,0,0));
@@ -350,7 +363,7 @@ TraceHit Map::TraceQ3(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *
 			cellPos.x--;
 			if (CellPtr(cellPos)->IsSolid()) {
 				Plot(1, pos, 6, Color(255, 255,0,0));
-				return TraceHit(CellPtr(cellPos), -pos, Vec2(cellPos) + Vec2(1, pos));
+				return Hit(CellPtr(cellPos), -pos, Vect(cellPos) + Vect(1, pos));
 			}
 
 			pos += opp;

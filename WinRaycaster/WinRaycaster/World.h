@@ -1,19 +1,33 @@
 #pragma once
 
 
-//#define SCRN_W	1920
-//#define SCRN_H	1080
+#define FPS		60
 
-#define SCRN_W	1280
-#define SCRN_H	720
+#define SCRN_W	1920
+#define SCRN_H	1080
+
+//#define SCRN_W	1280
+//#define SCRN_H	720
 
 //#define SCRN_W	960
 //#define SCRN_H	540
 
+//#define MIP_BIAS	(2.0f)
 //#define MIP_BIAS	2048.f/1080.f*1.1f
 #define MIP_BIAS	(256.f/(float)SCRN_H*1.1f)
 
 #define THREADCOUNT	8
+#define FLOATTYPE	FixedX
+
+typedef FixedFloat<20, long, long long> FixedX;
+
+typedef FixedFloat<8,  long, long long> Fixed8;
+typedef FixedFloat<16, long, long long> Fixed16;
+typedef FixedFloat<24, long, long long> Fixed24;
+
+typedef TempVect2D<float>		Vec2;
+typedef TempVect2D<int>			Int2;
+typedef TempVect2D<FLOATTYPE>	Vect;
 
 
 __declspec(selectany) float DebugX, DebugY, DebugScl;
@@ -39,6 +53,10 @@ protected:
 		// C = A * alpha + (1 - Alpha) * B
 		// C = A + (B - A) * Alpha  << Faster
 		return A + (((B - A) * Alpha) >> 8);
+	}
+
+	static FLOATTYPE FLerpBy(const FLOATTYPE &A, const FLOATTYPE &B, const FLOATTYPE &Alpha) {
+		return A + (B - A) * Alpha;
 	}
 
 public:
@@ -86,6 +104,13 @@ public:
 					 LerpBy(A.Red(),   B.Red(),   alpha),
 					 LerpBy(A.Green(), B.Green(), alpha), 
 					 LerpBy(A.Blue(),  B.Blue(),  alpha));
+	}
+
+	inline static Pixel FLerp(const Pixel &A, const Pixel &B, const FLOATTYPE Alpha) {
+		return Pixel(255, 
+					 FLerpBy(A.Red(),   B.Red(),   Alpha),
+					 FLerpBy(A.Green(), B.Green(), Alpha), 
+					 FLerpBy(A.Blue(),  B.Blue(),  Alpha));
 	}
 };
 
@@ -194,6 +219,43 @@ public:
 
 		return Pixel::Lerp(t, b, uv.y);
 	}
+
+	Pixel FBilerp(const Vect &TexUV, const int mip) const {
+		assert(mip < Mips);
+		const int mipWid = MipDim(mip, Wid);
+		const int mipHei = MipDim(mip, Hei);
+
+		//assert(TexUV.x>=0.0f);
+
+		Vect mipPos = TexUV * Vect(mipWid, mipHei);
+
+		Int2 uvPos(mipPos);
+
+		Vect uv = mipPos - uvPos;
+
+		if (uv.x < 0.0f)
+			uv.x += 1.0f;
+
+		if (uv.y < 0.0f)
+			uv.y += 1.0f;
+
+		uvPos.x &= mipWid - 1;
+		uvPos.y &= mipHei - 1;
+
+		Int2 uvOpp = uvPos + Int2(1, 1);
+		uvOpp.x &= mipWid - 1;	// Wrap using and instead of modulus. mipWid / mipHei must be a power of 2.
+		uvOpp.y &= mipHei - 1;
+
+		const Pixel &tl = Sample(Int2(uvPos.x, uvPos.y), mip);
+		const Pixel &tr = Sample(Int2(uvOpp.x, uvPos.y), mip);
+		const Pixel &bl = Sample(Int2(uvPos.x, uvOpp.y), mip);
+		const Pixel &br = Sample(Int2(uvOpp.x, uvOpp.y), mip);
+
+		const Pixel t = Pixel::FLerp(tl, tr, uv.x);
+		const Pixel b = Pixel::FLerp(bl, br, uv.x);
+
+		return Pixel::FLerp(t, b, uv.y);
+	}
 };
 
 
@@ -260,19 +322,31 @@ public:
 };
 
 
+template <typename Type>
 struct TraceHit {
+//	typedef TempVect2D<Type> Vect;
 	Cell	*pCell;
-	float	TexU;
-	Vec2	Pos;
+	//float	TexU;
+	Type TexU;
+	//Vec2	Pos;
+	Vect Pos;
 
-	TraceHit(Cell *pCell, const float TexU, const Vec2 &Pos) :
+	//TraceHit(Cell *pCell, const float TexU, const Vec2 &Pos) :
+	//	pCell(pCell), TexU(TexU), Pos(Pos) {}
+
+	TraceHit(Cell *pCell, const Type TexU, const Vect &Pos) :
 		pCell(pCell), TexU(TexU), Pos(Pos) {}
 };
 
+typedef TraceHit<FLOATTYPE> Hit;
 
+//template <typename Type>
 class Map {
 protected:
-	typedef TraceHit (Map::*TraceFunc)(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
+	//typedef TraceHit<Type> Hit;
+	//typedef TempVect2D<Type> Vect;
+	typedef Hit (Map::*TraceFunc)(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
+	//typedef TraceHit (Map::*TraceFunc)(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
 	const TraceFunc TraceFuncs[4] = {&Map::TraceQ0, &Map::TraceQ1, &Map::TraceQ2, &Map::TraceQ3};
 
 	vector<Cell>	map;
@@ -300,20 +374,26 @@ public:
 		return (Cell*)map.data() + Pos.x + Pos.y * Size;
 	}
 
-	inline bool InBounds(const Vec2 &Pos) const {
+	//inline bool InBounds(const Vec2 &Pos) const {
+	inline bool InBounds(const Vect &Pos) const {
 		return Pos.x >= 0.0f && Pos.x < (float)Size && 
 			   Pos.y >= 0.0f && Pos.y < (float)Size;
 	}
 
-	void Scan(Camera &Cam, Graphics *pGfx) const;
-	void Render(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx) const;
-	void Render2(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx) const;
+	//void Scan(Camera &Cam, Graphics *pGfx) const;
+	//void Render(Camera &Cam, const TraceHit &Hit, const int Col, Graphics *pGfx) const;
+	void Render2(Camera &Cam, const Hit &Hit, const int Col, Graphics *pGfx) const;
 
-	TraceHit Trace(const Vec2 &Origin, const float Theta, Graphics *pGfx) const;
-	TraceHit TraceQ0(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
-	TraceHit TraceQ1(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
-	TraceHit TraceQ2(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
-	TraceHit TraceQ3(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
+	//TraceHit Trace(const Vec2 &Origin, const float Theta, Graphics *pGfx) const;
+	//TraceHit TraceQ0(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
+	//TraceHit TraceQ1(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
+	//TraceHit TraceQ2(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
+	//TraceHit TraceQ3(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
+	Hit Trace(const Vect &Origin, const FLOATTYPE Theta, Graphics *pGfx) const;
+	Hit TraceQ0(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
+	Hit TraceQ1(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
+	Hit TraceQ2(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
+	Hit TraceQ3(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
 
 	void Debug(Graphics *pGfx) {
 		SolidBrush clrVoid(Color(255,255,255));
@@ -372,14 +452,14 @@ public:
 class Game {
 public:
 	//Input input;
-	Critical	CS;
-	HANDLE		hDone;
-	int			ThreadCol;
-	int			DoneCol;
+	Critical		CS;
+	HANDLE			hDone;
+	int				ThreadCol;
+	int				DoneCol;
 
-	Graphics	*pGfx = nullptr;
-	Camera		*pCam = nullptr;
-	Map			*pMap = nullptr;
+	Graphics		*pGfx = nullptr;
+	Camera			*pCam = nullptr;
+	Map				*pMap = nullptr;
 
 	vector<Texture> Textures;
 
@@ -400,7 +480,7 @@ public:
 
 	void InitGame() {
 		pCam = new Camera(SCRN_W, SCRN_H);
-		pCam->Pos = Vec2(5.5f, 5.5f);
+		pCam->Pos = Vec2(1.5f, 1.2f);
 		pCam->Dir = 0.0f * Ang2Rad;
 		pCam->FoV = 90.0f * Ang2Rad;
 
@@ -459,7 +539,7 @@ public:
 		WaitForSingleObject(hDone, INFINITE);
 
 
-		pCam->Dir += 5.0f * Ang2Rad * deltaTime;
+		pCam->Dir += 10.0f * Ang2Rad * deltaTime;
 		//pCam->Dir = fmod(pCam->Dir + 10.0f * Ang2Rad * deltaTime + QTAU, QTAU) - ETAU;
 
 		return;

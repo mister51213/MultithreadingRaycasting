@@ -57,12 +57,21 @@ public:
 	template <typename OtherType> FixedFloat(const OtherType Value) :
 		Value((IntType)(Value * (OtherType)(1 << FracBits))) {}
 
+#pragma warning(push)
+#pragma warning(disable: 4293)
+
 	template <int OtherFracBits> FixedFloat(const FixedFloat<OtherFracBits, IntType, LongType> &Value) :
 		Value((OtherFracBits > FracBits) ? (Value.Value >> (OtherFracBits - FracBits)) : (Value.Value << (FracBits - OtherFracBits))) {}
+
+#pragma warning(pop)
 
 	inline FixedFloat& operator= (const FixedFloat &Other) {
 		Value = Other.Value;
 		return *this;
+	}
+
+	inline FixedFloat operator- () const {
+		return Construct(-Value);
 	}
 
 	inline FixedFloat operator+ (const FixedFloat &Other) const {
@@ -81,44 +90,89 @@ public:
 
 	inline FixedFloat operator/ (const FixedFloat &Other) const {
 		//return Construct((Value << FracBits) / Other.Value);
-		return Construct((IntType)(((LongType)Value << FracBits) / (LongType)Other.Value));
+		return Construct((IntType)(((LongType)Value << FracBits) / Other.Value));
 	}
 
-	inline FixedFloat& operator+= (const FixedFloat &Other) const {
+	inline FixedFloat& operator+= (const FixedFloat &Other) {
 		*this = *this + Other;
 		return *this;
 	}
 
-	inline FixedFloat& operator-= (const FixedFloat &Other) const {
+	inline FixedFloat& operator-= (const FixedFloat &Other) {
 		*this = *this - Other;
 		return *this;
 	}
 
-	inline FixedFloat& operator*= (const FixedFloat &Other) const {
+	inline FixedFloat& operator*= (const FixedFloat &Other) {
 		*this = *this * Other;
 		return *this;
 	}
 
-	inline FixedFloat& operator/= (const FixedFloat &Other) const {
+	inline FixedFloat& operator/= (const FixedFloat &Other) {
 		*this = *this / Other;
 		return *this;
 	}
 
-	inline double AsInteger() const {
-		return Value >> FracBits;
+	template<typename OtherType> inline bool operator == (const OtherType &Other) const {
+		return Value == FixedFloat(Other).Value;
 	}
 
-	inline float AsFloat() const {
+	template<typename OtherType> inline bool operator != (const OtherType &Other) const {
+		return Value != FixedFloat(Other).Value;
+	}
+
+	template<typename OtherType> inline bool operator < (const OtherType &Other) const {
+		return Value < FixedFloat(Other).Value;
+	}
+
+	template<typename OtherType> inline bool operator <= (const OtherType &Other) const {
+		return Value <= FixedFloat(Other).Value;
+	}
+
+	template<typename OtherType> inline bool operator > (const OtherType &Other) const {
+		return Value > FixedFloat(Other).Value;
+	}
+
+	template<typename OtherType> inline bool operator >= (const OtherType &Other) const {
+		return Value >= FixedFloat(Other).Value;
+	}
+
+	template<typename OtherType> inline operator OtherType() const {
+		return (OtherType)(Value >> FracBits);
+	}
+
+	inline operator float() const {
 		return (float)(Value >> FracBits) + (float)(Value & FracMask) * FracFlt();
 	}
 
-	inline double AsDouble() const {
+	inline operator double() const {
 		return (double)(Value >> FracBits) + (double)(Value & FracMask) * FracDbl();
 	}
 };
 
-typedef FixedFloat<8, long, long long> Fixed8;
-typedef FixedFloat<16, long, long long> Fixed16;
+
+template<typename LeftType, int RightFracBits, typename RightIntType, typename RightLongType>
+inline FixedFloat<RightFracBits, RightIntType, RightLongType> operator - (const LeftType &Left, const FixedFloat<RightFracBits, RightIntType, RightLongType> &Right) {
+	return FixedFloat<RightFracBits, RightIntType, RightLongType>(Left) - Right;
+}
+
+
+template<typename LeftType, int RightFracBits, typename RightIntType, typename RightLongType>
+inline FixedFloat<RightFracBits, RightIntType, RightLongType> operator + (const LeftType &Left, const FixedFloat<RightFracBits, RightIntType, RightLongType> &Right) {
+	return FixedFloat<RightFracBits, RightIntType, RightLongType>(Left) + Right;
+}
+
+
+template<typename LeftType, int RightFracBits, typename RightIntType, typename RightLongType>
+inline FixedFloat<RightFracBits, RightIntType, RightLongType> operator * (const LeftType &Left, const FixedFloat<RightFracBits, RightIntType, RightLongType> &Right) {
+	return FixedFloat<RightFracBits, RightIntType, RightLongType>(Left) * Right;
+}
+
+
+template<typename LeftType, int RightFracBits, typename RightIntType, typename RightLongType>
+inline FixedFloat<RightFracBits, RightIntType, RightLongType> operator / (const LeftType &Left, const FixedFloat<RightFracBits, RightIntType, RightLongType> &Right) {
+	return FixedFloat<RightFracBits, RightIntType, RightLongType>(Left) / Right;
+}
 
 
 template <typename Type> struct TempVect2D {
@@ -138,7 +192,7 @@ template <typename Type> struct TempVect2D {
 	}
 
 	Type Size() const {
-		return sqrt(SizeSquared());
+		return sqrt((float)SizeSquared());
 	}
 
 	void Normalize() {
@@ -209,6 +263,3 @@ template <typename Type> struct TempVect2D {
 	}
 };
 
-typedef TempVect2D<float>	Vec2;
-typedef TempVect2D<int>		Int2;
-typedef TempVect2D<Fixed16>	Fixed2;
