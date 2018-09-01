@@ -3,20 +3,20 @@
 
 #define FPS		60
 
-#define SCRN_W	1920
-#define SCRN_H	1080
+//#define SCRN_W	1920
+//#define SCRN_H	1080
 
 //#define SCRN_W	1280
 //#define SCRN_H	720
 
-//#define SCRN_W	960
-//#define SCRN_H	540
+#define SCRN_W	960
+#define SCRN_H	540
 
 //#define MIP_BIAS	(2.0f)
 //#define MIP_BIAS	2048.f/1080.f*1.1f
 #define MIP_BIAS	(256.f/(float)SCRN_H*1.1f)
 
-#define THREADCOUNT	8
+#define THREADCOUNT	1
 #define FLOATTYPE	FixedX
 
 typedef FixedFloat<20, long, long long> FixedX;
@@ -347,7 +347,7 @@ protected:
 	//typedef TempVect2D<Type> Vect;
 	typedef Hit (Map::*TraceFunc)(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
 	//typedef TraceHit (Map::*TraceFunc)(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
-	const TraceFunc TraceFuncs[4] = {&Map::TraceQ0, &Map::TraceQ1, &Map::TraceQ2, &Map::TraceQ3};
+	//const TraceFunc TraceFuncs[4] = {&Map::TraceQ0, &Map::TraceQ1, &Map::TraceQ2, &Map::TraceQ3};
 
 	vector<Cell>	map;
 
@@ -390,10 +390,12 @@ public:
 	//TraceHit TraceQ2(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
 	//TraceHit TraceQ3(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
 	Hit Trace(const Vect &Origin, const FLOATTYPE Theta, Graphics *pGfx) const;
-	Hit TraceQ0(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
+	Hit TraceQ(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx, const int QuadNum) const;
+
+/*	Hit TraceQ0(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
 	Hit TraceQ1(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
 	Hit TraceQ2(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
-	Hit TraceQ3(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
+	Hit TraceQ3(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const; */
 
 	void Debug(Graphics *pGfx) {
 		SolidBrush clrVoid(Color(255,255,255));
@@ -547,5 +549,64 @@ public:
 
 	void Render() {
 		pCam->Display(pGfx);
+	}
+};
+
+
+enum QuadCellNum : int {
+	qTL, qTR, qBL, qBR
+};
+
+
+class Quad {
+public:
+	int		Depth;
+	int		Size;
+	Int2	Pos;
+	Quad	*pParent = nullptr;
+	//Quad	*pNeighbor[4] = {nullptr};
+	Quad	*pChild[4] = {nullptr};
+
+	Quad(const int MaxDepth) :
+		Quad(nullptr, MaxDepth, 1 << MaxDepth, Int2(0, 0)) {}
+
+	Quad(Quad *pParent, const int Depth, const int Size, const Int2 &Pos) : 
+		pParent(pParent), Depth(Depth), Size(Size), Pos(Pos) {}
+
+	inline Quad* operator[] (const int Child) {
+		return pChild[Child];
+	}
+
+	bool Subdivide() {
+		// Depth 0 is the limit
+		if (!Depth)
+			return false;
+
+		const int half = Size >> 1;
+		pChild[qTL] = new Quad(this, Depth - 1, half, Pos + Int2(0,    0   ));
+		pChild[qTR] = new Quad(this, Depth - 1, half, Pos + Int2(half, 0   ));
+		pChild[qBL] = new Quad(this, Depth - 1, half, Pos + Int2(0,    half));
+		pChild[qBR] = new Quad(this, Depth - 1, half, Pos + Int2(half, half));
+		
+		return true;
+	}
+
+	Quad* FindCell(const Int2 &Position) {
+		if (!Depth)
+			return this;
+
+		const Int2 RelPos = Position - Pos;
+		/*
+		const int half = Size >> 1;
+		int LorR = RelPos.x < half ? 0 : 1;
+		int TorB = RelPos.y < half ? 0 : 2;
+		int child = TorB + LorR;
+		*/
+
+		int LorR = (RelPos.x >> (Depth - 1));
+		int TorB = (RelPos.y >> (Depth - 1)) << 1;
+		int child = TorB + LorR;
+
+		return pChild[child] ? pChild[child]->FindCell(Position) : this;
 	}
 };

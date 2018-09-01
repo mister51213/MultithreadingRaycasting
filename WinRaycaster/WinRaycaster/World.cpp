@@ -28,17 +28,19 @@ GetAnother:
 
 		float ang = (float)(col - halfwid) * slice + Cam.Dir;
 		
-		if (game.pGfx) {
+		/*if (game.pGfx) {
 			Point Org((int)(DebugX + Cam.Pos.x * DebugScl), (int)(DebugY + Cam.Pos.y * DebugScl));
 			Point Dst((int)(Org.X + sin(ang) * DebugScl*4), (int)(Org.Y - cos(ang) * DebugScl*4));
 			game.pGfx->DrawLine(&Pen(Color(63, 0,0,255)), Org, Dst);
-		}
+		}*/
 
 		// Type should be a templated map type
-		auto hit = game.pMap->Trace(Cam.Pos, ang, nullptr); //game.pGfx);
+		auto hit = game.pMap->Trace(Cam.Pos, ang, nullptr);
+		//auto hit = game.pMap->Trace(Cam.Pos, ang, game.pGfx);
 
 		if (hit.pCell)
-			game.pMap->Render2(Cam, hit, col, nullptr); //game.pGfx);
+			game.pMap->Render2(Cam, hit, col, nullptr);
+			//game.pMap->Render2(Cam, hit, col, game.pGfx);
 
 		EnterCriticalSection(&game.CS);
 
@@ -196,11 +198,75 @@ Hit Map::Trace(const Vect &Origin, const FLOATTYPE Theta, Graphics *pGfx) const 
 	if (CellPtr(cellPos)->IsSolid())
 		return Hit(nullptr, 0, Vect());
 
+	return TraceQ(cellPos, orgPos, Theta, pGfx, quad);
 	//return (this->*TraceFuncs[quad])(cellPos, orgPos, theta, pGfx);
-	return (this->*TraceFuncs[quad])(cellPos, orgPos, Theta, pGfx);
+	//return (this->*TraceFuncs[quad])(cellPos, orgPos, Theta, pGfx);
 }
 
 
+FLOATTYPE TabFlt[] = {
+	0.0, -123, 1.0, -123
+};
+
+int TabInt[] = {
+	-1, 123, 1, 123
+};
+
+
+//template<typename FLOATTYPE>
+Hit Map::TraceQ(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx, const int QuadNum) const {
+	//return Hit(nullptr, 0, Vect());
+
+	if (QuadNum == 1 || QuadNum == 3)
+		return Hit(nullptr, 0, Vect());
+
+	const FLOATTYPE FltVal = TabFlt[QuadNum];
+	const int       IntVal = TabInt[QuadNum];
+
+	FLOATTYPE opp = tanf(theta), com = tanf(FLOATTYPE(QTAU) - theta);
+	FLOATTYPE pos = orgPos.x - (FltVal - orgPos.y) * opp;
+	
+	opp *= (FLOATTYPE)-IntVal;
+
+	for (;;) {
+		if (pos < 0.0f) {
+			pos += 1.0f;
+			Plot(0.0f, FltVal - (1.0f - pos) * com, 2, Color(255, 0,0,255));
+
+			cellPos.x--;
+			if (CellPtr(cellPos)->IsSolid()) {
+				//return Hit(nullptr, 0, Vect());
+				pos = FltVal - (1.0f - pos) * com;
+				Plot(1, pos, 6, Color(255, 0,0,255));
+				return Hit(CellPtr(cellPos), -pos, Vect(cellPos) + Vect(1, pos));
+			}
+		} else if (pos > 1.0f) {
+			pos -= 1.0f;
+			Plot(1.0f, FltVal + pos * com, 2, Color(255, 0,191,0));
+
+			cellPos.x++;
+			if (CellPtr(cellPos)->IsSolid()) {
+				//return Hit(nullptr, 0, Vect());
+				pos = FltVal + pos * com;
+				Plot(0, pos, 6, Color(255, 0,191,0));
+				return Hit(CellPtr(cellPos), pos, Vect(cellPos) + Vect(0, pos));
+			}
+		} else {
+			Plot(pos, FltVal, 2.0f, Color(255, 255,0,0));
+
+			cellPos.y += IntVal;
+			if (CellPtr(cellPos)->IsSolid()) {
+				//return Hit(nullptr, 0, Vect());
+				Plot(pos, 1.0f - FltVal, 6, Color(255, 255,0,0));
+				return Hit(CellPtr(cellPos), pos, Vect(cellPos) + Vect(pos, 1.0f - FltVal));
+			}
+
+			pos += opp;
+		}
+	}
+}
+
+/*
 //template<typename FLOATTYPE>
 Hit Map::TraceQ0(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const {
 	//return Hit(nullptr, 0, Vect());
@@ -243,6 +309,7 @@ Hit Map::TraceQ0(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *p
 		}
 	}
 }
+
 
 //template<typename FLOATTYPE>
 Hit Map::TraceQ1(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const {
@@ -296,7 +363,7 @@ typename Hit Map::TraceQ2(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Gr
 	for (;;) {
 		if (pos < 0.0f) {
 			pos += 1.0f;
-			Plot(0, 1.0f - (1.0f - pos) * com, 2, Color(255, 0,0,255));
+			Plot(0.0f, 1.0f - (1.0f - pos) * com, 2, Color(255, 0,0,255));
 
 			cellPos.x--;
 			if (CellPtr(cellPos)->IsSolid()) {
@@ -306,7 +373,7 @@ typename Hit Map::TraceQ2(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Gr
 			}
 		} else if (pos > 1.0f) {
 			pos -= 1.0f;
-			Plot(1, 1.0f + pos * com, 2, Color(255, 0,191,0));
+			Plot(1.0f, 1.0f + pos * com, 2, Color(255, 0,191,0));
 
 			cellPos.x++;
 			if (CellPtr(cellPos)->IsSolid()) {
@@ -315,9 +382,9 @@ typename Hit Map::TraceQ2(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Gr
 				return Hit(CellPtr(cellPos), pos, Vect(cellPos) + Vect(0, pos));
 			}
 		} else {
-			Plot(pos, 1, 2, Color(255, 255,0,0));
+			Plot(pos, 1.0f, 2.0f, Color(255, 255,0,0));
 
-			cellPos.y++;
+			cellPos.y += 1;
 			if (CellPtr(cellPos)->IsSolid()) {
 				Plot(pos, 0, 6, Color(255, 255,0,0));
 				return Hit(CellPtr(cellPos), -pos, Vect(cellPos) + Vect(pos, 0));
@@ -370,3 +437,4 @@ Hit Map::TraceQ3(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *p
 		}
 	}
 }
+*/
