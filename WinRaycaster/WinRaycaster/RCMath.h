@@ -261,5 +261,10 @@ template <typename Type> struct TempVect2D {
 		x *= scalar;
 		y *= scalar;
 	}
+
+	Type& operator[] (const int Index) {
+		_ASSERTE(!(Index & -2));
+		return ((Type*)this)[Index];
+	}
 };
 

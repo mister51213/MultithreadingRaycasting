@@ -198,73 +198,109 @@ Hit Map::Trace(const Vect &Origin, const FLOATTYPE Theta, Graphics *pGfx) const 
 	if (CellPtr(cellPos)->IsSolid())
 		return Hit(nullptr, 0, Vect());
 
-	return TraceQ(cellPos, orgPos, Theta, pGfx, quad);
+	//return TraceQ(cellPos, orgPos, Theta, pGfx, quad);
+	//return TraceQ(quad, cellPos, orgPos, Theta, pGfx);
+
 	//return (this->*TraceFuncs[quad])(cellPos, orgPos, theta, pGfx);
-	//return (this->*TraceFuncs[quad])(cellPos, orgPos, Theta, pGfx);
+	return (this->*TraceFuncs[quad])(cellPos, orgPos, Theta, pGfx);
 }
 
-
+/*
 FLOATTYPE TabFlt[] = {
-	0.0, -123, 1.0, -123
+	0.0, 1.0, 1.0, 0
 };
 
 int TabInt[] = {
-	-1, 123, 1, 123
+	-1, 1, 1, -1
+};
+
+int XIdx[] = {
+	0, 1, 0, 1
+};
+
+FLOATTYPE Flip[4][3] = {
+	{-1.0,  1.0,  1.0},
+	{ 1.0, -1.0,  1.0},
+	{-1.0,  1.0, -1.0},
+	{ 1.0, -1.0, -1.0}
 };
 
 
-//template<typename FLOATTYPE>
-Hit Map::TraceQ(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx, const int QuadNum) const {
+Hit Map::TraceQ(const int QuadNum, Int2 cellPos, Vect orgPos, const FLOATTYPE theta, Graphics *pGfx) const {
 	//return Hit(nullptr, 0, Vect());
-
-	if (QuadNum == 1 || QuadNum == 3)
-		return Hit(nullptr, 0, Vect());
 
 	const FLOATTYPE FltVal = TabFlt[QuadNum];
 	const int       IntVal = TabInt[QuadNum];
+	const int       X = XIdx[QuadNum], Y = 1 - X;
 
-	FLOATTYPE opp = tanf(theta), com = tanf(FLOATTYPE(QTAU) - theta);
-	FLOATTYPE pos = orgPos.x - (FltVal - orgPos.y) * opp;
-	
+	FLOATTYPE opp, com;
+	if (QuadNum & 1) {
+		opp = tanf(FLOATTYPE(QTAU) - theta); com = tanf(theta);
+	} else {
+		opp = tanf(theta); com = tanf(FLOATTYPE(QTAU) - theta);
+	}
+
+	FLOATTYPE pos = orgPos[X] - (FltVal - orgPos[Y]) * opp;
 	opp *= (FLOATTYPE)-IntVal;
 
-	for (;;) {
+	for (Vect ofs;;) {
 		if (pos < 0.0f) {
 			pos += 1.0f;
-			Plot(0.0f, FltVal - (1.0f - pos) * com, 2, Color(255, 0,0,255));
 
-			cellPos.x--;
+			ofs[X] = 0.0f;
+			ofs[Y] = FltVal - (1.0f - pos) * com;
+			Plot(ofs[X], ofs[Y], 2, Color(255, 0,0,255));
+
+			cellPos[X]--;
 			if (CellPtr(cellPos)->IsSolid()) {
 				//return Hit(nullptr, 0, Vect());
 				pos = FltVal - (1.0f - pos) * com;
-				Plot(1, pos, 6, Color(255, 0,0,255));
-				return Hit(CellPtr(cellPos), -pos, Vect(cellPos) + Vect(1, pos));
+
+				ofs[X] = 1.0f;
+				ofs[Y] = pos;
+				Plot(ofs[X], ofs[Y], 6, Color(255, 0,0,255));
+
+				return Hit(CellPtr(cellPos), pos * Flip[QuadNum][0], Vect(cellPos) + ofs);
 			}
 		} else if (pos > 1.0f) {
 			pos -= 1.0f;
-			Plot(1.0f, FltVal + pos * com, 2, Color(255, 0,191,0));
 
-			cellPos.x++;
+			ofs[X] = 1.0f;
+			ofs[Y] = FltVal + pos * com;
+			Plot(ofs[X], ofs[Y], 2, Color(255, 0,191,0));
+
+			cellPos[X]++;
 			if (CellPtr(cellPos)->IsSolid()) {
 				//return Hit(nullptr, 0, Vect());
 				pos = FltVal + pos * com;
-				Plot(0, pos, 6, Color(255, 0,191,0));
-				return Hit(CellPtr(cellPos), pos, Vect(cellPos) + Vect(0, pos));
+
+				ofs[X] = 0.0f;
+				ofs[Y] = pos;
+				Plot(ofs[X], ofs[Y], 6, Color(255, 0,191,0));
+
+				return Hit(CellPtr(cellPos), pos * Flip[QuadNum][1], Vect(cellPos) + ofs);
 			}
 		} else {
-			Plot(pos, FltVal, 2.0f, Color(255, 255,0,0));
+			ofs[X] = pos;
+			ofs[Y] = FltVal;
+			Plot(ofs[X], ofs[Y], 2.0f, Color(255, 255,0,0));
 
-			cellPos.y += IntVal;
+			cellPos[Y] += IntVal;
 			if (CellPtr(cellPos)->IsSolid()) {
 				//return Hit(nullptr, 0, Vect());
-				Plot(pos, 1.0f - FltVal, 6, Color(255, 255,0,0));
-				return Hit(CellPtr(cellPos), pos, Vect(cellPos) + Vect(pos, 1.0f - FltVal));
+				
+				ofs[X] = pos;
+				ofs[Y] = 1.0f - FltVal;
+				Plot(ofs[X], ofs[Y], 6, Color(255, 255,0,0));
+
+				return Hit(CellPtr(cellPos), pos * Flip[QuadNum][2], Vect(cellPos) + ofs);
 			}
 
 			pos += opp;
 		}
 	}
 }
+*/
 
 /*
 //template<typename FLOATTYPE>

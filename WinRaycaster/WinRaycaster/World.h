@@ -3,21 +3,21 @@
 
 #define FPS		60
 
-//#define SCRN_W	1920
-//#define SCRN_H	1080
+#define SCRN_W	1920
+#define SCRN_H	1080
 
 //#define SCRN_W	1280
 //#define SCRN_H	720
 
-#define SCRN_W	960
-#define SCRN_H	540
+//#define SCRN_W	960
+//#define SCRN_H	540
 
 //#define MIP_BIAS	(2.0f)
 //#define MIP_BIAS	2048.f/1080.f*1.1f
 #define MIP_BIAS	(256.f/(float)SCRN_H*1.1f)
 
-#define THREADCOUNT	1
-#define FLOATTYPE	FixedX
+#define THREADCOUNT	8
+#define FLOATTYPE	float //FixedX
 
 typedef FixedFloat<20, long, long long> FixedX;
 
@@ -32,10 +32,20 @@ typedef TempVect2D<FLOATTYPE>	Vect;
 
 __declspec(selectany) float DebugX, DebugY, DebugScl;
 
-
+/*
 #define Plot(PlotX, PlotY, Rad, color) {									\
 	if (pGfx) {																\
 		Vec2 OppPos = Vec2(cellPos) + Vec2(PlotX, PlotY);					\
+		int DstX = (int)(DebugX + OppPos.x * DebugScl);						\
+		int DstY = (int)(DebugY + OppPos.y * DebugScl);						\
+		pGfx->DrawEllipse(&Pen(color), DstX-Rad, DstY-Rad, Rad*2, Rad*2);	\
+	}																		\
+}
+*/
+
+#define PlotQ(Pos, Rad, color) {											\
+	if (pGfx) {																\
+		Vec2 OppPos = Vec2(cellPos) + Pos;									\
 		int DstX = (int)(DebugX + OppPos.x * DebugScl);						\
 		int DstY = (int)(DebugY + OppPos.y * DebugScl);						\
 		pGfx->DrawEllipse(&Pen(color), DstX-Rad, DstY-Rad, Rad*2, Rad*2);	\
@@ -345,9 +355,12 @@ class Map {
 protected:
 	//typedef TraceHit<Type> Hit;
 	//typedef TempVect2D<Type> Vect;
-	typedef Hit (Map::*TraceFunc)(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
+	//typedef Hit (Map::*TraceFunc)(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
 	//typedef TraceHit (Map::*TraceFunc)(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
 	//const TraceFunc TraceFuncs[4] = {&Map::TraceQ0, &Map::TraceQ1, &Map::TraceQ2, &Map::TraceQ3};
+
+	typedef Hit (Map::*TraceFunc)(Int2 cellPos, Vect orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
+	const TraceFunc TraceFuncs[4] = {&Map::TraceQ<0>, &Map::TraceQ<1>, &Map::TraceQ<2>, &Map::TraceQ<3>};
 
 	vector<Cell>	map;
 
@@ -390,7 +403,104 @@ public:
 	//TraceHit TraceQ2(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
 	//TraceHit TraceQ3(Int2 &cellPos, Vec2 &orgPos, const float theta, Graphics *pGfx) const;
 	Hit Trace(const Vect &Origin, const FLOATTYPE Theta, Graphics *pGfx) const;
-	Hit TraceQ(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx, const int QuadNum) const;
+	//Hit TraceQ(const int QuadNum, Int2 cellPos, Vect orgPos, const FLOATTYPE theta, Graphics *pGf) const;
+
+	
+	template<int QuadNum>
+	Hit TraceQ(Int2 cellPos, Vect orgPos, const FLOATTYPE theta, Graphics *pGfx) const {
+		//return Hit(nullptr, 0, Vect());
+
+		FLOATTYPE TabFlt[] = {
+			0.0, 1.0, 1.0, 0
+		};
+
+		int TabInt[] = {
+			-1, 1, 1, -1
+		};
+
+		int XIdx[] = {
+			0, 1, 0, 1
+		};
+
+		FLOATTYPE Flip[4][3] = {
+			{-1.0,  1.0,  1.0},
+			{ 1.0, -1.0,  1.0},
+			{-1.0,  1.0, -1.0},
+			{ 1.0, -1.0, -1.0}
+		};
+
+		const FLOATTYPE FltVal = TabFlt[QuadNum];
+		const int       IntVal = TabInt[QuadNum];
+		const int       X = XIdx[QuadNum], Y = 1 - X;
+
+		FLOATTYPE opp, com;
+		if (QuadNum & 1) {
+			opp = tanf(FLOATTYPE(QTAU) - theta); com = tanf(theta);
+		} else {
+			opp = tanf(theta); com = tanf(FLOATTYPE(QTAU) - theta);
+		}
+
+		FLOATTYPE pos = orgPos[X] - (FltVal - orgPos[Y]) * opp;
+		opp *= (FLOATTYPE)-IntVal;
+
+		for (Vect ofs;;) {
+			if (pos < 0.0f) {
+				pos += 1.0f;
+
+				ofs[X] = 0.0f;
+				ofs[Y] = FltVal - (1.0f - pos) * com;
+				PlotQ(ofs, 2, Color(255, 0,0,255));
+
+				cellPos[X]--;
+				if (CellPtr(cellPos)->IsSolid()) {
+					//return Hit(nullptr, 0, Vect());
+					pos = FltVal - (1.0f - pos) * com;
+
+					ofs[X] = 1.0f;
+					ofs[Y] = pos;
+					PlotQ(ofs, 6, Color(255, 0,0,255));
+
+					return Hit(CellPtr(cellPos), pos * Flip[QuadNum][0], Vect(cellPos) + ofs);
+				}
+			} else if (pos > 1.0f) {
+				pos -= 1.0f;
+
+				ofs[X] = 1.0f;
+				ofs[Y] = FltVal + pos * com;
+				PlotQ(ofs, 2, Color(255, 0,191,0));
+
+				cellPos[X]++;
+				if (CellPtr(cellPos)->IsSolid()) {
+					//return Hit(nullptr, 0, Vect());
+					pos = FltVal + pos * com;
+
+					ofs[X] = 0.0f;
+					ofs[Y] = pos;
+					PlotQ(ofs, 6, Color(255, 0,191,0));
+
+					return Hit(CellPtr(cellPos), pos * Flip[QuadNum][1], Vect(cellPos) + ofs);
+				}
+			} else {
+				ofs[X] = pos;
+				ofs[Y] = FltVal;
+				PlotQ(ofs, 2.0f, Color(255, 255,0,0));
+
+				cellPos[Y] += IntVal;
+				if (CellPtr(cellPos)->IsSolid()) {
+					//return Hit(nullptr, 0, Vect());
+				
+					ofs[X] = pos;
+					ofs[Y] = 1.0f - FltVal;
+					PlotQ(ofs, 6, Color(255, 255,0,0));
+
+					return Hit(CellPtr(cellPos), pos * Flip[QuadNum][2], Vect(cellPos) + ofs);
+				}
+
+				pos += opp;
+			}
+		}
+	}
+
 
 /*	Hit TraceQ0(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
 	Hit TraceQ1(Int2 &cellPos, Vect &orgPos, const FLOATTYPE theta, Graphics *pGfx) const;
@@ -527,10 +637,9 @@ public:
 		pCam->Pos = Vec2(5.5, 4.5) + Vec2(sinf(-pCam->Dir * 2.5f), cosf(-pCam->Dir) * 2.0f);
 
 		//pMap->Debug(pGfx);
+
 		//pMap->Scan(*pCam, pGfx);
-
 		//pMap->Scan(*pCam, nullptr);
-
 
 		pCam->Clear();
 		ThreadCol = DoneCol = 0;
@@ -541,7 +650,7 @@ public:
 		WaitForSingleObject(hDone, INFINITE);
 
 
-		pCam->Dir += 10.0f * Ang2Rad * deltaTime;
+		pCam->Dir += 1.0f * Ang2Rad * deltaTime;
 		//pCam->Dir = fmod(pCam->Dir + 10.0f * Ang2Rad * deltaTime + QTAU, QTAU) - ETAU;
 
 		return;
