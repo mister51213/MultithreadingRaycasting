@@ -17,7 +17,7 @@
 #define MIP_BIAS	(256.f/(float)SCRN_H*1.1f)
 
 #define THREADCOUNT	8
-#define FLOATTYPE	float //FixedX
+#define FLOATTYPE	float// FixedX
 
 typedef FixedFloat<20, long, long long> FixedX;
 
