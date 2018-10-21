@@ -5,8 +5,8 @@ class Game {
 public:
 	Critical		CS;
 	HANDLE			hDone;
-	int				ThreadCol;
-	int				DoneCol;
+	int				ThreadRow;
+	int				DoneRow;
 
 	Graphics		*pGfx = nullptr;
 	Camera			*pCam = nullptr;
@@ -30,8 +30,8 @@ public:
 
 	void InitGame() {
 		pCam = new Camera(SCRN_W, SCRN_H);
-		pCam->Pos = Vec2(1.5f, 1.2f);
-		pCam->Dir = 0.0f * Ang2Rad;
+		//pCam->Pos = Vec2(3, 5);
+		pCam->Dir = Vec2(-35.0f * Ang2Rad, 90.0f * Ang2Rad);
 		pCam->FoV = 90.0f * Ang2Rad;
 
 		Textures.push_back(Texture(L"textures\\wall1.png"));
@@ -54,38 +54,61 @@ public:
 		const Pixel B(0xFF00007F);
 
 		for (int i = 0; i < Size; i++) {
-			pMap->GetCell(Int2(i, 0)).pWallTex = &Textures[0];
-			pMap->GetCell(Int2(0, i)).pWallTex = &Textures[0];
-			pMap->GetCell(Int2(i, s)).pWallTex = &Textures[0];
-			pMap->GetCell(Int2(s, i)).pWallTex = &Textures[0];
+			pMap->GetCell(Int3(i, 0, 1)).pWallTex = &Textures[0];
+			pMap->GetCell(Int3(0, i, 1)).pWallTex = &Textures[0];
+			pMap->GetCell(Int3(i, s, 1)).pWallTex = &Textures[0];
+			pMap->GetCell(Int3(s, i, 1)).pWallTex = &Textures[0];
 		}
 
-		pMap->GetCell(Int2(3, 3)).pWallTex = &Textures[0];
-		pMap->GetCell(Int2(7, 3)).pWallTex = &Textures[0];
-		pMap->GetCell(Int2(3, 7)).pWallTex = &Textures[0];
-		pMap->GetCell(Int2(7, 7)).pWallTex = &Textures[0];
+		pMap->GetCell(Int3(3, 3, 1)).pWallTex = &Textures[0];
+		pMap->GetCell(Int3(7, 3, 1)).pWallTex = &Textures[0];
+		pMap->GetCell(Int3(3, 7, 1)).pWallTex = &Textures[0];
+		pMap->GetCell(Int3(7, 7, 1)).pWallTex = &Textures[0];
+
+		/*pMap->Root().pWall = &Textures[0];
+		pMap->Root().Divide();
+		pMap->Root()[qTL]->Divide()[qBR]->pWall = nullptr;
+		pMap->Root()[qTR]->Divide()[qBL]->pWall = nullptr;
+		pMap->Root()[qBL]->Divide()[qTR]->pWall = nullptr;
+		pMap->Root()[qBR]->Divide()[qTL]->pWall = nullptr;
+
+		pMap->Root()(qTL)(qTR).Divide()(qBL).pWall = nullptr;
+		pMap->Root()(qTR)(qTL).Divide()(qBR).pWall = nullptr;
+		pMap->Root()(qTR)(qBR).Divide()(qTL).pWall = nullptr;
+		pMap->Root()(qBR)(qTR).Divide()(qBL).pWall = nullptr;
+		pMap->Root()(qBR)(qBL).Divide()(qTR).pWall = nullptr;
+		pMap->Root()(qBL)(qBR).Divide()(qTL).pWall = nullptr;
+		pMap->Root()(qBL)(qTL).Divide()(qBR).pWall = nullptr;
+		pMap->Root()(qTL)(qBL).Divide()(qTR).pWall = nullptr;*/
 	}
 
 	void Tick(float deltaTime, HWND hWnd) {
 		if (!pCam)
 			return;
 
-		pCam->Pos = Vec2(5.5, 4.5) + Vec2(sinf(-pCam->Dir * 2.5f), cosf(-pCam->Dir) * 2.0f);
+		//pCam->Dir = 45.5f * Ang2Rad;
 
-		if (pGfx)
+		pCam->Pos = Vec3(5.5, 5.5, 1.5f) + Vec3(sinf(-pCam->Dir.x * 1.5f), cosf(-pCam->Dir.x) * 1.0f, 0);
+		//pCam->Pos = Vec2(5, 13);
+
+		if (pGfx) {
 			pMap->Debug(pGfx);
+			//pMap->DebugQuad(pMap->Root(), pGfx);
+		}
 
 		pCam->Clear();
-		ThreadCol = DoneCol = 0;
+		ThreadRow = DoneRow = 0;
 
 		for (Thread *thread : Threads)
 			thread->Wake();
 
 		WaitForSingleObject(hDone, INFINITE);
 
-		pCam->Dir += 10.0f * Ang2Rad * deltaTime;
-		//pCam->Dir = fmod(pCam->Dir + 10.0f * Ang2Rad * deltaTime + QTAU, QTAU) - ETAU;
+		pCam->Dir.x += 10.f * Ang2Rad * deltaTime;
 
+#ifdef SHOWDEBUG
+		Sleep(100);
+#endif
 		return;
 	}
 };

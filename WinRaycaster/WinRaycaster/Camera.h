@@ -3,8 +3,9 @@
 
 class Camera {
 public:
-	Vec2	Pos;
-	float	Dir;
+	Vec3	Pos;
+	//float	Dir;
+	Vec2	Dir;
 	float	FoV;
 
 	int		Wid;

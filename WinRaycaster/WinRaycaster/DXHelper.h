@@ -14,10 +14,10 @@ struct FSQVertex {
 
 class DXHelper {
 protected:
-	IDXGIFactory			*pFactory		= nullptr;
-	IDXGIAdapter			*pAdapter		= nullptr;
-	IDXGIOutput				*pModeEnum		= nullptr;
-	DXGI_MODE_DESC			*pModes			= nullptr;
+	IDXGIFactory			 *pFactory		= nullptr;
+	IDXGIAdapter			 *pAdapter		= nullptr;
+	IDXGIOutput				 *pModeEnum		= nullptr;
+	DXGI_MODE_DESC			 *pModes		= nullptr;
 
 	IDXGISwapChain			 *pSwapChain	= nullptr;
 	ID3D11Device			 *pD3Dev		= nullptr;
@@ -173,6 +173,8 @@ public:
 		D3D11_TEXTURE2D_DESC texDesc = {};
 		texDesc.Width				= ScreenWidth;
 		texDesc.Height				= ScreenHeight;
+		//texDesc.Width				= ScreenHeight;
+		//texDesc.Height				= ScreenWidth;
 		texDesc.MipLevels			= 1;
 		texDesc.ArraySize			= 1;
 		texDesc.Format				= DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -270,8 +272,10 @@ public:
 		char *pDst = (char*)(mapTex.pData);
 		const size_t dstPitch = mapTex.RowPitch;
 		const size_t srcPitch = ScrWid * sizeof(Pixel);
+		//const size_t srcPitch = ScrHei * sizeof(Pixel);
 
 		for (unsigned y = 0; y < ScrHei; y++)
+		//for (unsigned y = 0; y < ScrWid; y++)
 			memcpy(pDst + y * dstPitch, (char*)pCam->pImage + y * srcPitch, srcPitch);
 
 		pDevCtx->Unmap(pSysBuff, 0);
