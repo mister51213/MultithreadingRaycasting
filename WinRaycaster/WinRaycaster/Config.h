@@ -1,14 +1,14 @@
 #pragma once
 
 
-#define SHOWDEBUG	// Show trace debug
+//#define SHOWDEBUG	// Show trace debug
 
 #define BILERP		// Enable bilinear filtering
 #define TRILERP		// Enable trilinear filtering (requires BILERP)
 #define DARKEN		// Enable depth-based darkening
 
-#define SCRN_W	1//1920
-#define SCRN_H	1//1080
+#define SCRN_W	640//1920
+#define SCRN_H	384//1080
 
 //#define SCRN_W	1280
 //#define SCRN_H	720
@@ -18,7 +18,7 @@
 
 #define MIP_BIAS	(256.f/(float)SCRN_H*1.1f)
 
-#define THREADCOUNT	1//8
+#define THREADCOUNT	12	//8
 #define FLOATTYPE	float //FixedX
 
 typedef FixedFloat<20, long, long long> FixedX;

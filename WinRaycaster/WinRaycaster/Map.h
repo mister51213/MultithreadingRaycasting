@@ -43,7 +43,7 @@ struct TraceHit {
 	Vect3		Pos;
 
 	TraceHit(Type *pCell, const FLOATTYPE TexU, const FLOATTYPE TexV, const Vect3 &Pos) :
-		pCell(pCell), TexU(TexU), TexV(0.5f), Pos(Pos) {}
+		pCell(pCell), TexU(TexU), TexV(TexV), Pos(Pos) {}
 };
 
 typedef TraceHit<Cell> Hit;
@@ -57,12 +57,13 @@ protected:
 	//typedef HitQ (GameMap::*TraceFunc)(const Vect2 &Origin, const FLOATTYPE theta, Graphics *pGfx);
 	//TraceFunc TraceFuncs[4] = {&GameMap::TraceQQ<0>, &GameMap::TraceQQ<1>, &GameMap::TraceQQ<2>, &GameMap::TraceQQ<3>};
 
-	vector<Cell>	Map;
 	//Quad			QMap;
 
 public:
 	int		Size;
 	int		WallHeight;
+
+	vector<Cell>	Map;
 
 	GameMap(const int Size, const int WallHeight) : 
 		Size(Size), WallHeight(WallHeight) {
@@ -103,6 +104,112 @@ public:
 	void Render(Camera &Cam, const Hit &hit, const int ofs, Graphics *pGfx) const;
 	//void Render(Camera &Cam, const /*HitQ*/Hit &hit, const int Col, Graphics *pGfx) const;
 	/*HitQ*/ Hit Trace(const Vect3 &Origin, const FLOATTYPE Theta, Graphics *pGfx);
+
+	Hit TraceS(Vect3 CamPos, const Vect3 step /*Vect2 CamAng*/, Graphics *pGfx) const {
+		/*const Vect3 step = Vect3(
+			sinf(CamAng.y) * sinf(CamAng.x),
+			sinf(CamAng.y) * cosf(CamAng.x),
+			-cosf(CamAng.y)
+		) * 0.01f;*/
+
+		Int3 lastPos;
+		for (Vect3 pos = CamPos;; pos += step) {
+			Int3 cellPos(pos);
+
+			Cell *pCell = CellPtr(cellPos);
+			if (pCell->pWallTex) {
+				lastPos -= cellPos;
+				
+				Vect2 texUV(0, 0);
+				if (lastPos.x)
+					texUV = Vect2(pos.y - (float)cellPos.y, pos.z - (float)cellPos.z);
+				else if (lastPos.y)
+					texUV = Vect2(pos.x - (float)cellPos.x, pos.z - (float)cellPos.z);
+				else
+					texUV = Vect2(pos.x - (float)cellPos.x, pos.y - (float)cellPos.y);
+
+				return Hit(pCell, texUV.x, texUV.y, pos);
+			}
+
+			lastPos = cellPos;
+		}
+
+	}
+
+
+	enum WhatDirs : int {
+		dirPX, dirNX,
+		dirPY, dirNY,
+		dirPZ, dirNZ
+	};
+	
+	typedef Vect3 (*Whatever)(const float TexU, const float TexV);
+	
+	static Vect3 WhatPX(const float TexU, const float TexV) { return Vect3(1, TexU, TexV); }
+	static Vect3 WhatNX(const float TexU, const float TexV) { return Vect3(0, TexU, TexV); }
+	static Vect3 WhatPY(const float TexU, const float TexV) { return Vect3(TexU, 1, TexV); }
+	static Vect3 WhatNY(const float TexU, const float TexV) { return Vect3(TexU, 0, TexV); }
+	static Vect3 WhatPZ(const float TexU, const float TexV) { return Vect3(TexU, TexV, 1); }
+	static Vect3 WhatNZ(const float TexU, const float TexV) { return Vect3(TexU, TexV, 0); }
+
+	Whatever DirFunc[6] = {WhatPX, WhatNX, WhatPY, WhatNY, WhatPZ, WhatNZ};
+
+	Hit Trace3D(const Vect3 CamPos, const Vect2 CamDir, Graphics *pGfx) const {
+		Vect2 tanUV(tanf(CamDir.x), tanf(CamDir.y));
+		Vect2 comUV(tanf(FLOATTYPE(QTAU) - CamDir.x), tanf(FLOATTYPE(QTAU) - CamDir.y));
+
+		int dir;
+		Int3 cellPos(CamPos), step;
+		Vect3 lclPos = CamPos - cellPos;
+
+		if (abs(tanUV.x) < abs(comUV.x)) {		// Angle is closer to N/S
+			if (abs(tanUV.y) < abs(tanUV.x)) {	// Angle is closer to U/D
+				step = Int3(0, 0, tanUV.y < 0.0f ? -1 : 1);
+				dir = tanUV.y < 0.0f ? dirNZ : dirPZ;
+			} else {							// Angle is closer to N/S
+				step = Int3(0, comUV.x < 0.0f ? -1 : 1, 0);
+				dir = comUV.x < 0.0f ? dirNY : dirPY;
+			}
+		} else {								// Angle is closer to E/W
+			if (abs(tanUV.y) < abs(comUV.x)) {	// Angle is closer to U/D
+				step = Int3(0, 0, tanUV.y < 0.0f ? -1 : 1);
+				dir = tanUV.y < 0.0f ? dirNZ : dirPZ;
+			} else {							// Angle is closer to E/W
+				step = Int3(tanUV.x < 0.0f ? -1 : 1, 0, 0);
+				dir = tanUV.x < 0.0f ? dirNX : dirPX;
+			}
+		}
+
+		FLOATTYPE posU = lclPos.x + tanUV.x * lclPos.y;
+		FLOATTYPE posV = lclPos.y + tanUV.y * lclPos.z;
+
+		for (;;) {
+			const int adjU = (posU < 0.0f) ? -1 : (posU >= 1.0f ? 1 : 0);
+			const int adjV = (posV < 0.0f) ? -1 : (posV >= 1.0f ? 1 : 0);
+			
+			if (!adjU && !adjV) {		// Both hit opposite
+				DbgPlot(Vect2(posU, 0), 1, Color(255, 0, 0, 0));
+
+				cellPos += step;
+
+				Cell *pCell = CellPtr(cellPos);
+				if (pCell->pWallTex) {
+					return Hit(pCell, posU, posV, Vect3(cellPos) + DirFunc[dir](posU, posV));
+				}
+
+				posU += tanUV.x;
+				posV += tanUV.y;
+			} else if (adjU && adjV) {	// Neither hit opposite
+				return Hit(nullptr, 0, 0, Vect3());
+			} else if (adjU) {			// U hit adjacent, V hit opposite
+				return Hit(nullptr, 0, 0, Vect3());
+			} else {					// V hit adjacent, U hit opposite
+				return Hit(nullptr, 0, 0, Vect3());
+			}
+
+		}
+
+	}
 
 	template<int QuadNum>
 	Hit TraceQ(Int3 cellPos, Vect3 orgPos, const FLOATTYPE theta, Graphics *pGfx) const {
@@ -160,7 +267,7 @@ public:
 
 					return Hit(CellPtr(cellPos), pos * Flip[QuadNum][0], 0.5f, Vect3(cellPos) + ofs);
 				}
-			} else if (pos > 1.0f) {
+			} else if (pos >= 1.0f) {
 				pos -= 1.0f;
 
 				ofs[X] = 1.0f;

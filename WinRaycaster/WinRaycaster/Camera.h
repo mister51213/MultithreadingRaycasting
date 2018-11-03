@@ -11,11 +11,15 @@ public:
 	int		Wid;
 	int		Hei;
 
+	float	*pFLOATS;
 	Pixel	*pImage;
 	Bitmap	*pBmp;
 
 	Camera(const int Wid, const int Hei) :
 		Wid(Wid), Hei(Hei) {
+
+		pFLOATS = new float[Wid * Hei * 4];
+		assert(pFLOATS);
 
 		pImage = new Pixel[Wid * Hei];
 		assert(pImage);
@@ -25,8 +29,13 @@ public:
 	}
 
 	void Clear() {
+		//return;
+
 		assert(pImage);
 		memset(pImage, 0, Wid * Hei * sizeof(Pixel));
+		//for (int i = 0; i < Wid * Hei; pImage[i++] = 0xFF000000);
+
+		memset(pFLOATS, 0, Wid * Hei * 4 * sizeof(float));
 		//for (int i = 0; i < Wid * Hei; pImage[i++] = 0xFF000000);
 	}
 

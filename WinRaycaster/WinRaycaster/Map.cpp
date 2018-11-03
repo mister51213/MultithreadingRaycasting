@@ -55,15 +55,27 @@ void GameMap::DebugQuad(Quad &Q, Graphics *pGfx) {
 */
 
 void GameMap::Render(Camera &Cam, const Hit &hit, const int ofs, Graphics *pGfx) const {
+	float *pPixel = Cam.pFLOATS + ofs * 4;
+	pPixel[0] = hit.TexU;
+	pPixel[1] = hit.TexV;
+	pPixel[2] = (hit.Pos - Cam.Pos).SizeSquared();
+	pPixel[3] = 1.0f;
+	return;
+
 	Texture *pWall = hit.pCell->pWallTex;
 	Int2 texUV(hit.TexU * pWall->Wid, hit.TexV * pWall->Hei);
 	texUV.x &= pWall->Wid - 1; texUV.y &= pWall->Hei - 1;	// HACK TO WRAP TEXTURES
+
 	Pixel p = pWall->Sample(texUV, 0);
+
 	//int ofs = ScrPos.x + ScrPos.y * Cam.Wid;
-	Cam.pImage[ofs] = p;
-	//Cam.pImage[ofs + Cam.Wid    ] = p;
-	//Cam.pImage[ofs + Cam.Wid * 2] = p;
-	//Cam.pImage[ofs + Cam.Wid * 3] = p;
+	
+	const float sqrDist = (hit.Pos - Cam.Pos).Size();
+	const int mul = (int)(256.0f / max(sqrDist, 1.0f));
+
+	Cam.pImage[ofs] = p.Scale(mul);
+	//Cam.pImage[ofs] = 0xFF000000 | (texUV.x << 16) | (texUV.y << 8) | mul;
+
 }
 
 /*void GameMap::Render(Camera &Cam, const Hit &hit, const int Col, Graphics *pGfx) const {

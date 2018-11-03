@@ -30,6 +30,9 @@ protected:
 	ID3D11InputLayout		 *pLayout		= nullptr;
 	ID3D11Buffer			 *pVertBuff		= nullptr;
 	ID3D11SamplerState		 *pSmpState		= nullptr;
+	ID3D11SamplerState		 *pWallSmpState	= nullptr;
+
+	vector<ID3D11ShaderResourceView*> TexViews;
 
 	unsigned ScrWid = 0;
 	unsigned ScrHei = 0;
@@ -177,7 +180,7 @@ public:
 		//texDesc.Height				= ScreenWidth;
 		texDesc.MipLevels			= 1;
 		texDesc.ArraySize			= 1;
-		texDesc.Format				= DXGI_FORMAT_B8G8R8A8_UNORM;
+		texDesc.Format				= DXGI_FORMAT_R32G32B32A32_FLOAT;// DXGI_FORMAT_B8G8R8A8_UNORM;
 		texDesc.Usage				= D3D11_USAGE_DYNAMIC;
 		texDesc.BindFlags			= D3D11_BIND_SHADER_RESOURCE;
 		texDesc.CPUAccessFlags		= D3D11_CPU_ACCESS_WRITE;
@@ -251,8 +254,63 @@ public:
 		if (FAILED(result))
 			return Failed();
 
+		//D3D11_SAMPLER_DESC sampDesc = {};
+		sampDesc.Filter			= D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		sampDesc.AddressU		= D3D11_TEXTURE_ADDRESS_WRAP;
+		sampDesc.AddressV		= D3D11_TEXTURE_ADDRESS_WRAP;
+		sampDesc.AddressW		= D3D11_TEXTURE_ADDRESS_WRAP;
+		sampDesc.ComparisonFunc	= D3D11_COMPARISON_NEVER;
+		sampDesc.MinLOD			= 0;
+		sampDesc.MaxLOD			= D3D11_FLOAT32_MAX;
+
+		result = pD3Dev->CreateSamplerState(&sampDesc, &pWallSmpState);
+		if (FAILED(result))
+			return Failed();
+
 		ScrWid = ScreenWidth;
 		ScrHei = ScreenHeight;
+
+		return false;
+	}
+
+	bool NewTexture(Pixel *pImage, int Wid, int Hei) {
+		D3D11_SUBRESOURCE_DATA subData = {};
+		subData.pSysMem = pImage;
+		subData.SysMemPitch = Wid * sizeof(Pixel);
+		
+		D3D11_TEXTURE2D_DESC texDesc = {};
+		texDesc.Width				= Wid;
+		texDesc.Height				= Hei;
+		texDesc.MipLevels			= 1;
+		texDesc.ArraySize			= 1;
+		texDesc.Format				= DXGI_FORMAT_B8G8R8A8_UNORM;
+		texDesc.Usage				= D3D11_USAGE_IMMUTABLE;
+		texDesc.BindFlags			= D3D11_BIND_SHADER_RESOURCE;
+		texDesc.CPUAccessFlags		= 0;
+		texDesc.MiscFlags			= 0;
+		texDesc.SampleDesc.Count	= 1;
+		texDesc.SampleDesc.Quality	= 0;
+
+		ID3D11Texture2D *pTex;
+		HRESULT result = pD3Dev->CreateTexture2D(&texDesc, &subData, &pTex);
+		if (FAILED(result))
+			return true;
+
+/*		return pTex;
+	}
+
+	void BindTexture(ID3D11Texture2D *pTex) {*/
+		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Format				= DXGI_FORMAT_B8G8R8A8_UNORM;
+		srvDesc.ViewDimension		= D3D11_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MipLevels	= -1;
+
+		ID3D11ShaderResourceView *pView;
+		result = pD3Dev->CreateShaderResourceView(pTex, &srvDesc, &pView);
+		if (FAILED(result))
+			return true;
+
+		TexViews.push_back(pView);
 
 		return false;
 	}
@@ -271,12 +329,14 @@ public:
 
 		char *pDst = (char*)(mapTex.pData);
 		const size_t dstPitch = mapTex.RowPitch;
-		const size_t srcPitch = ScrWid * sizeof(Pixel);
+		//const size_t srcPitch = ScrWid * sizeof(Pixel);
 		//const size_t srcPitch = ScrHei * sizeof(Pixel);
+		const size_t srcPitch = ScrWid * sizeof(float) * 4;
 
 		for (unsigned y = 0; y < ScrHei; y++)
 		//for (unsigned y = 0; y < ScrWid; y++)
-			memcpy(pDst + y * dstPitch, (char*)pCam->pImage + y * srcPitch, srcPitch);
+			//memcpy(pDst + y * dstPitch, (char*)pCam->pImage + y * srcPitch, srcPitch);
+			memcpy(pDst + y * dstPitch, (char*)pCam->pFLOATS + y * srcPitch, srcPitch);
 
 		pDevCtx->Unmap(pSysBuff, 0);
 
@@ -287,7 +347,12 @@ public:
 		pDevCtx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pDevCtx->IASetVertexBuffers(0, 1, &pVertBuff, &stride, &offset);
 		pDevCtx->PSSetShaderResources(0, 1, &pSysView);
+
+		for (int i = 0; i < TexViews.size(); i++)
+			pDevCtx->PSSetShaderResources(i + 1, 1, &TexViews[i]);
+
 		pDevCtx->PSSetSamplers(0, 1, &pSmpState);
+		pDevCtx->PSSetSamplers(1, 1, &pWallSmpState);
 		pDevCtx->Draw(6, 0);
 
 		pSwapChain->Present(VSync ? 1 : 0, 0);
@@ -295,3 +360,6 @@ public:
 		return false;
 	}
 };
+
+
+static DXHelper DX;
