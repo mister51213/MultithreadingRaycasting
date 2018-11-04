@@ -58,23 +58,24 @@ void GameMap::Render(Camera &Cam, const Hit &hit, const int ofs, Graphics *pGfx)
 	float *pPixel = Cam.pFLOATS + ofs * 4;
 	pPixel[0] = hit.TexU;
 	pPixel[1] = hit.TexV;
-	pPixel[2] = (hit.Pos - Cam.Pos).SizeSquared();
+	pPixel[2] = (hit.Pos - Cam.Pos).SizeSquared(); // distance - sqrted inside shader
 	pPixel[3] = 1.0f;
 	return;
 
-	Texture *pWall = hit.pCell->pWallTex;
-	Int2 texUV(hit.TexU * pWall->Wid, hit.TexV * pWall->Hei);
-	texUV.x &= pWall->Wid - 1; texUV.y &= pWall->Hei - 1;	// HACK TO WRAP TEXTURES
+	// LEGACY
+	////Texture *pWall = hit.pCell->pWallTex;
+	//Int2 texUV(hit.TexU * pWall->Wid, hit.TexV * pWall->Hei);
+	//texUV.x &= pWall->Wid - 1; texUV.y &= pWall->Hei - 1;	// HACK TO WRAP TEXTURES
 
-	Pixel p = pWall->Sample(texUV, 0);
+	//Pixel p = pWall->Sample(texUV, 0);
 
-	//int ofs = ScrPos.x + ScrPos.y * Cam.Wid;
-	
-	const float sqrDist = (hit.Pos - Cam.Pos).Size();
-	const int mul = (int)(256.0f / max(sqrDist, 1.0f));
+	////int ofs = ScrPos.x + ScrPos.y * Cam.Wid;
+	//
+	//const float sqrDist = (hit.Pos - Cam.Pos).Size();
+	//const int mul = (int)(256.0f / max(sqrDist, 1.0f));
 
-	Cam.pImage[ofs] = p.Scale(mul);
-	//Cam.pImage[ofs] = 0xFF000000 | (texUV.x << 16) | (texUV.y << 8) | mul;
+	//Cam.pImage[ofs] = p.Scale(mul);
+	////Cam.pImage[ofs] = 0xFF000000 | (texUV.x << 16) | (texUV.y << 8) | mul;
 
 }
 
@@ -168,4 +169,18 @@ void GameMap::Render(Camera &Cam, const Hit &hit, const int ofs, Graphics *pGfx)
 
 	return (this->*TraceFuncs[quad])(cellPos, orgPos, Theta, pGfx);
 	//return (this->*TraceFuncs[quad])(Origin, Theta, pGfx);
+}
+
+TraceHit<Cell> Cell::Query(Vect3 pos, Int3 lastPos, Int3 cellPos) {
+	lastPos -= cellPos;
+
+	Vect2 texUV(0, 0);
+	if (lastPos.x)
+		texUV = Vect2(pos.y - (float)cellPos.y, pos.z - (float)cellPos.z);
+	else if (lastPos.y)
+		texUV = Vect2(pos.x - (float)cellPos.x, pos.z - (float)cellPos.z);
+	else
+		texUV = Vect2(pos.x - (float)cellPos.x, pos.y - (float)cellPos.y);
+
+	return TraceHit<Cell>(this, texUV.x, texUV.y, pos);
 }

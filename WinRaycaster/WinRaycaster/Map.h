@@ -22,18 +22,21 @@ __declspec(selectany) float DebugX, DebugY, DebugScl;
 #endif
 
 
-class Cell {
-public:
-	Texture *pWallTex;	// Wall is solid if assigned, Hollow if not
+struct Shape {
+	enum ShapeType {
+		AABB = 0,
+		Sphere = 1,
+		Cone = 2
+	};
 
-	Cell() :
-		pWallTex(nullptr) {}
+	Vect3 pos;
+	Vect3 rot;
 
-	inline bool IsSolid() const {
-		return pWallTex ? true : false;
-	}
+	union Bounds {
+		Vect2 hWidHei;
+		Vect2 radHei;
+	};
 };
-
 
 template <typename Type>
 struct TraceHit {
@@ -46,9 +49,31 @@ struct TraceHit {
 		pCell(pCell), TexU(TexU), TexV(TexV), Pos(Pos) {}
 };
 
+class Cell {
+public:
+	Texture *pWallTex;	// Wall is solid if assigned, Hollow if not
+
+	Cell() :
+		pWallTex(nullptr) {}
+
+	// Should we QUERY or SKIP current cell?
+	// - If a solid wall, return that surface immediately
+	// - If Contains inner shapes, then query interior of cell
+	// - If neither of these are true, SKIP the cell
+	inline bool IsSolid() const {
+		//return pWallTex ? true : false;
+
+		return pWallTex || !innerShapes.empty();
+	}
+
+	TraceHit<Cell> Query(Vect3 pos, Int3 lastPos, Int3 cellPos);
+
+	std::vector<Shape> innerShapes;
+};
+
+
 typedef TraceHit<Cell> Hit;
 //typedef TraceHit<Quad> HitQ;
-
 
 class GameMap {
 protected:
@@ -105,37 +130,52 @@ public:
 	//void Render(Camera &Cam, const /*HitQ*/Hit &hit, const int Col, Graphics *pGfx) const;
 	/*HitQ*/ Hit Trace(const Vect3 &Origin, const FLOATTYPE Theta, Graphics *pGfx);
 
-	Hit TraceS(Vect3 CamPos, const Vect3 step /*Vect2 CamAng*/, Graphics *pGfx) const {
-		/*const Vect3 step = Vect3(
-			sinf(CamAng.y) * sinf(CamAng.x),
-			sinf(CamAng.y) * cosf(CamAng.x),
-			-cosf(CamAng.y)
-		) * 0.01f;*/
-
+	// Multi shape version
+	Hit TraceS(Vect3 CamPos, const Vect3 step, Graphics *pGfx) const { 
+	
 		Int3 lastPos;
 		for (Vect3 pos = CamPos;; pos += step) {
 			Int3 cellPos(pos);
 
 			Cell *pCell = CellPtr(cellPos);
-			if (pCell->pWallTex) {
-				lastPos -= cellPos;
-				
-				Vect2 texUV(0, 0);
-				if (lastPos.x)
-					texUV = Vect2(pos.y - (float)cellPos.y, pos.z - (float)cellPos.z);
-				else if (lastPos.y)
-					texUV = Vect2(pos.x - (float)cellPos.x, pos.z - (float)cellPos.z);
-				else
-					texUV = Vect2(pos.x - (float)cellPos.x, pos.y - (float)cellPos.y);
-
-				return Hit(pCell, texUV.x, texUV.y, pos);
-			}
+			if (pCell->IsSolid())
+				return pCell->Query(pos, lastPos, cellPos);
 
 			lastPos = cellPos;
 		}
-
 	}
 
+	#pragma region Basic cube version
+	//Hit TraceS(Vect3 CamPos, const Vect3 step /*Vect2 CamAng*/, Graphics *pGfx) const {
+	//	/*const Vect3 step = Vect3(
+	//		sinf(CamAng.y) * sinf(CamAng.x),
+	//		sinf(CamAng.y) * cosf(CamAng.x),
+	//		-cosf(CamAng.y)
+	//	) * 0.01f;*/
+
+	//	Int3 lastPos;
+	//	for (Vect3 pos = CamPos;; pos += step) {
+	//		Int3 cellPos(pos);
+
+	//		Cell *pCell = CellPtr(cellPos);
+	//		if (pCell->pWallTex) {
+	//			lastPos -= cellPos;
+	//			
+	//			Vect2 texUV(0, 0);
+	//			if (lastPos.x)
+	//				texUV = Vect2(pos.y - (float)cellPos.y, pos.z - (float)cellPos.z);
+	//			else if (lastPos.y)
+	//				texUV = Vect2(pos.x - (float)cellPos.x, pos.z - (float)cellPos.z);
+	//			else
+	//				texUV = Vect2(pos.x - (float)cellPos.x, pos.y - (float)cellPos.y);
+
+	//			return Hit(pCell, texUV.x, texUV.y, pos);
+	//		}
+	//		lastPos = cellPos;
+	//	}
+	//}
+
+#pragma endregion
 
 	enum WhatDirs : int {
 		dirPX, dirNX,
