@@ -23,19 +23,49 @@ __declspec(selectany) float DebugX, DebugY, DebugScl;
 
 
 struct Shape {
-	enum ShapeType {
+	enum EShape {
 		AABB = 0,
 		Sphere = 1,
 		Cone = 2
 	};
 
+	Shape(Vect3 ps, Vect3 rt, EShape tp = EShape::Sphere) :
+		pos(ps),
+		rot(rt) ,
+		type(tp)
+	{}
+
+
 	Vect3 pos;
 	Vect3 rot;
+	EShape type;
 
 	union Bounds {
 		Vect2 hWidHei;
 		Vect2 radHei;
-	};
+
+		Bounds() {}
+	} bounds;
+
+	bool Query(Vect3 tracePos, Vect3 tracePath, Vect2& outUV, Vect3& outPos) {
+		switch (type) {
+			case Sphere:
+			{
+				float dToSphSq = (pos - tracePos).SizeSquared();
+				float radSq = bounds.radHei.x * bounds.radHei.x;
+
+				if (dToSphSq < radSq) {
+					tracePath.Normalize();
+					outPos = tracePos + tracePath * (sqrt(dToSphSq) - bounds.radHei.x);
+					outUV = Vect2(outUV.x, outPos.y);
+					return true;
+				}
+			}
+
+			default:
+				return false;
+		}
+	}
 };
 
 template <typename Type>
@@ -48,6 +78,10 @@ struct TraceHit {
 	TraceHit(Type *pCell, const FLOATTYPE TexU, const FLOATTYPE TexV, const Vect3 &Pos) :
 		pCell(pCell), TexU(TexU), TexV(TexV), Pos(Pos) {}
 };
+
+
+typedef TraceHit<class Cell> Hit;
+//typedef TraceHit<Quad> HitQ;
 
 class Cell {
 public:
@@ -66,14 +100,10 @@ public:
 		return pWallTex || !innerShapes.empty();
 	}
 
-	TraceHit<Cell> Query(Vect3 pos, Int3 lastPos, Int3 cellPos);
+	TraceHit<Cell> Query(Vect3 pos, Int3 lastPos, Int3 cellPos, Vect3 step);
 
 	std::vector<Shape> innerShapes;
 };
-
-
-typedef TraceHit<Cell> Hit;
-//typedef TraceHit<Quad> HitQ;
 
 class GameMap {
 protected:
@@ -139,7 +169,7 @@ public:
 
 			Cell *pCell = CellPtr(cellPos);
 			if (pCell->IsSolid())
-				return pCell->Query(pos, lastPos, cellPos);
+				return pCell->Query(pos, lastPos, cellPos, step);
 
 			lastPos = cellPos;
 		}

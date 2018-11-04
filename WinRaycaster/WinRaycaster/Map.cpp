@@ -171,16 +171,36 @@ void GameMap::Render(Camera &Cam, const Hit &hit, const int ofs, Graphics *pGfx)
 	//return (this->*TraceFuncs[quad])(Origin, Theta, pGfx);
 }
 
-TraceHit<Cell> Cell::Query(Vect3 pos, Int3 lastPos, Int3 cellPos) {
-	lastPos -= cellPos;
+TraceHit<Cell> Cell::Query(Vect3 entryPos, Int3 lastPos, Int3 cellPos, Vect3 step) {
+	// case when it's just a solid wall
+	if (pWallTex) {
+		lastPos -= cellPos;
 
-	Vect2 texUV(0, 0);
-	if (lastPos.x)
-		texUV = Vect2(pos.y - (float)cellPos.y, pos.z - (float)cellPos.z);
-	else if (lastPos.y)
-		texUV = Vect2(pos.x - (float)cellPos.x, pos.z - (float)cellPos.z);
-	else
-		texUV = Vect2(pos.x - (float)cellPos.x, pos.y - (float)cellPos.y);
+		Vect2 texUV(0, 0);
+		if (lastPos.x)
+			texUV = Vect2(entryPos.y - (float)cellPos.y, entryPos.z - (float)cellPos.z);
+		else if (lastPos.y)
+			texUV = Vect2(entryPos.x - (float)cellPos.x, entryPos.z - (float)cellPos.z);
+		else
+			texUV = Vect2(entryPos.x - (float)cellPos.x, entryPos.y - (float)cellPos.y);
 
-	return TraceHit<Cell>(this, texUV.x, texUV.y, pos);
+		return TraceHit<Cell>(this, texUV.x, texUV.y, entryPos);
+
+	}
+	else {
+	// OTHERWISE - keep stepping until we find an inner shape
+
+	// Pick the closest shape to the trace (bad algorithm!
+	for (Shape& shape : innerShapes) {
+			Vect2 uv;
+			Vect3 hitPos;
+
+			for (;; entryPos += step) {
+				for (Shape& shape : innerShapes) {
+					if (shape.Query(entryPos, step, uv, hitPos))
+						return TraceHit<Cell>(this, uv.x, uv.y, hitPos);
+				}
+			}
+		}
+	}
 }

@@ -68,10 +68,15 @@ public:
 		for (int z = 1; z < s; z++) {
 			if (z == 2) continue;
 
-			pMap->GetCell(Int3(3, 3, z)).pWallTex = &Textures[0];
-			pMap->GetCell(Int3(7, 3, z)).pWallTex = &Textures[0];
-			pMap->GetCell(Int3(3, 7, z)).pWallTex = &Textures[0];
-			pMap->GetCell(Int3(7, 7, z)).pWallTex = &Textures[0];
+			//pMap->GetCell(Int3(3, 3, z)).pWallTex = &Textures[0];
+			//pMap->GetCell(Int3(7, 3, z)).pWallTex = &Textures[0];
+			//pMap->GetCell(Int3(3, 7, z)).pWallTex = &Textures[0];
+			//pMap->GetCell(Int3(7, 7, z)).pWallTex = &Textures[0];
+
+			pMap->GetCell(Int3(3, 3, z)).innerShapes.emplace_back(Vect3(3.5, 3.5, z + 0.5), Vect3(0,0,0), Shape::EShape::Sphere);
+			pMap->GetCell(Int3(7, 3, z)).innerShapes.emplace_back(Vect3(7.5, 3.5, z	+ 0.5), Vect3(0,0,0), Shape::EShape::Sphere);
+			pMap->GetCell(Int3(3, 7, z)).innerShapes.emplace_back(Vect3(3.5, 7.5, z	+ 0.5), Vect3(0,0,0), Shape::EShape::Sphere);
+			pMap->GetCell(Int3(7, 7, z)).innerShapes.emplace_back(Vect3(7.5, 7.5, z	+ 0.5), Vect3(0,0,0), Shape::EShape::Sphere);
 		}
 
 		/*pMap->Root().pWall = &Textures[0];

@@ -48,7 +48,7 @@ GetAnother:
 					sinf(angV) * cosf(angU),
 					cosf(angV),
 					0.0f
-				) * 0.025f;
+				) * 0.1f/*0.025f*/;
 
 				//XMVECTOR vecStep = XMVectorSet(1.0f, 0, 0, 0);
 
